@@ -11,14 +11,10 @@ from pathlib import Path
 import sys
 import os
 
-if getattr(sys, "frozen", False):
-    BASE_DIR = Path(sys.executable).parent
-else:
-    BASE_DIR = Path(__file__).parent
 
-PROJECT_DIR = BASE_DIR.parent
-
-INPUT_FILE = "./csv_recon_report/recon_export.json"
+INPUT_FILE = "csv_recon_report/recon_export.json"
+SUMMARY_JSON_FILE = "csv_recon_report/recon_summary.json"
+SUMMARY_CSV_FILE = "csv_recon_report/recon_summary.csv"
 
 MERCHANT_ID_KEY = "Merchant ID"
 PAYMENT_TYPE_KEY = "Loại giao dịch"
@@ -30,8 +26,7 @@ RECON_RESULT_KEY = "Kết quả đối soát"
 NOTE_KEY = "Ghi chú"
 POSTING_DATE_KEY = "Ngày giao dịch"
 IS_CHARGE_KEY = "IsChargeFee"
-SUMMARY_JSON_FILE = "./csv_recon_report/recon_summary.json"
-SUMMARY_CSV_FILE = "./csv_recon_report/recon_summary.csv"
+
 
 def get_posting_date_from_range(cell_value, file_name):
     """
@@ -490,6 +485,7 @@ def process_file_data(file_name, rows):
                     recon_text == "Xử lý lệch (Đối tác nhiều hơn)"
                 ):
                     recon_result = "PARTNER_MORE"
+                    posting_date = parse_posting_date_from_filename(file_name)
 
             # ==================================================
             # TRANSFER

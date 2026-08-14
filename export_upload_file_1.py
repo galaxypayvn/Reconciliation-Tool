@@ -7,8 +7,8 @@ import calendar
 from pathlib import Path
 
 # from trio import Path
-INPUT_FILE = "./csv_recon_report/recon_summary.csv"
-OUTPUT_FILE = "./csv_recon_report/upload_file.csv"
+INPUT_FILE = "csv_recon_report/recon_summary.csv"
+OUTPUT_FILE = "csv_recon_report/upload_file.csv"
 
 
 DEFAULT_CURRENCY = "VND"
@@ -1013,7 +1013,12 @@ def build_title_wallet(
                 return "Imedia-Lệch GD Bill (GP)"
 
         elif payment_type == "REFUND":
-            return "Imedia-HLệch topup (GP)"
+            if "TOPUP" in merchant.upper():
+                return "Imedia-HLệch topup (GP)"
+            elif "BILL" in merchant.upper():
+                return "Imedia-HLệch Billing (GP)"
+            else:
+                return f"Imedia-HLệch {merchant} (GP)"
 
     # ======================================================
     # VNPAY
@@ -1257,6 +1262,7 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
         title = title.replace("XLý Lệch ", "Xử lý Lệch ")
     elif "HLệch" in title:
         title = title.replace("HLệch ", "Hoàn Lệch ")
+        #print(title + "+"*60)
         
         
     if "(ĐT)" in title:
@@ -1264,6 +1270,7 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
         rtitle = f"{rtitle} N{posting_date} (ĐT)"
         if "Nạp Ví" in title:
             rtitle = f"{rtitle.replace(" Nạp Ví ", " Nạp tiền vào TK ví ")}"
+            #print(rtitle + "="*60)
         elif "BVB" in title:
             rtitle = f"{rtitle.replace("QR", "GD QR code")}"
         elif "Zalo" in title:
@@ -1319,9 +1326,13 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
             rtitle = f"{title.replace(" QR ", " QR code ")} N{posting_date}"
         elif "Hoàn Lệch Rút tiền Ví(GP)" in title:
             rtitle = title.replace("Hoàn Lệch Rút tiền Ví(GP)", "Xử lý Lệch Rút tiền TK Ví (GP)")
-        elif "Xử lý Lệch" in title:
+        elif "Xử lý Lệch" in title or "Napas-Hoàn Lệch" in title:
             if "Napas" in title:
-                rtitle = title.replace("Nạp tiền Ví", "Nạp tiền TK Ví (ĐT)")
+                if "Nạp Ví" in title:
+                    print("z"*60)
+                    rtitle = title.replace("Nạp Ví", "Nạp tiền vào tài khoản ví")
+                else:
+                    rtitle = title.replace("Nạp tiền Ví", "Nạp tiền TK Ví (ĐT)")
             elif "HDB" in title:
                 rtitle = title.replace("Nạp tiền Ví", "Nạp tiền vào TK Ví (ĐT)")
         elif "VIETJET" in title:
