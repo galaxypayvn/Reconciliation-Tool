@@ -17,23 +17,51 @@ jobs:
           python-version: "3.12"
 
       - name: Check project files
+        shell: cmd
         run: |
-          echo "Current directory:"
-          pwd
-          echo "Files:"
+          echo ========================================
+          echo Current directory
+          echo ========================================
+          cd
+
+          echo.
+          echo ========================================
+          echo Root files
+          echo ========================================
           dir
-          echo "Requirements files:"
+
+          echo.
+          echo ========================================
+          echo Requirements files
+          echo ========================================
           dir /s /b *requirements*.txt
+
+          echo.
+          echo ========================================
+          echo Scripts
+          echo ========================================
+          dir Scripts
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pyinstaller
-          pip install -r requirements.txt
+          python -m pip install pyinstaller
+          python -m pip install -r requirements.txt
 
       - name: Build EXE
         run: |
           pyinstaller --onefile --name ReconciliationTool Scripts\run_reconciliation.py
+
+      - name: Check EXE
+        shell: cmd
+        run: |
+          if not exist dist\ReconciliationTool.exe (
+            echo ERROR: EXE was not created.
+            exit /b 1
+          )
+
+          echo EXE created successfully:
+          dir dist\ReconciliationTool.exe
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
