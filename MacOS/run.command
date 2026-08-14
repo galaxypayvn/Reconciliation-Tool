@@ -2,7 +2,7 @@
 
 cd "$(dirname "$0")/.."
 
-python3 Scripts/run_reconciliation.py
+python3 run_reconciliation.py
 
 echo
 echo "======================================"

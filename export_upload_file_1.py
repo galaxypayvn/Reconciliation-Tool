@@ -1319,7 +1319,7 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
             # print(f"đổi tên GPAY GD Thanh Toán ============++++++++")
         elif "BVB-Hoàn" in title:
             rtitle = f"{title.replace("GD QR ", "GD Thanh toán QR code ")}"
-        elif "topup" in title and "Hoàn Lệch" in title:
+        elif ("topup" in title or "Billing" in title) and "Hoàn Lệch" in title:
             rtitle = f"{title.replace("Hoàn Lệch ", "Hoàn Lệch GD ")}"
             # print(f"đổi tên IMEDIA Hoàn Lệch GD ============++++++++")
         elif "Khải Hoàn" in title:
