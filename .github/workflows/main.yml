@@ -34,7 +34,7 @@ jobs:
           }
 
           Write-Host "Check run_reconciliation.py:"
-          if (Test-Path "$env:GITHUB_WORKSPACE\Scripts\run_reconciliation.py") {
+          if (Test-Path "$env:GITHUB_WORKSPACE\run_reconciliation.py") {
               Write-Host "FOUND run_reconciliation.py"
           }
           else {
@@ -55,7 +55,7 @@ jobs:
           python -m PyInstaller `
             --onefile `
             --name ReconciliationTool `
-            "$env:GITHUB_WORKSPACE\Scripts\run_reconciliation.py"
+            "$env:GITHUB_WORKSPACE\run_reconciliation.py"
 
       - name: Check EXE
         shell: pwsh
