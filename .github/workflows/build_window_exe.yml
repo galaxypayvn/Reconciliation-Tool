@@ -19,6 +19,20 @@ jobs:
       - name: Check project files
         shell: cmd
         run: |
+          echo Workspace:
+          echo %GITHUB_WORKSPACE%
+          echo Root files:
+          dir "%GITHUB_WORKSPACE%"
+
+          echo.
+          echo Check requirements:
+          if exist "%GITHUB_WORKSPACE%\requirements.txt" (
+              echo FOUND requirements.txt
+          ) else (
+              echo NOT FOUND requirements.txt
+              exit /b 1
+          )
+          
           echo ========================================
           echo Current directory
           echo ========================================
