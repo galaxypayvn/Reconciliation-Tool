@@ -5,7 +5,7 @@ from datetime import datetime, time, timedelta
 import re
 import calendar
 from pathlib import Path
-
+from openpyxl import Workbook
 # from trio import Path
 INPUT_FILE = "csv_recon_report/recon_summary.csv"
 OUTPUT_FILE = "csv_recon_report/upload_file.csv"
@@ -118,6 +118,9 @@ def get_date_range_from_months_match(posting_date, file_name):
     # Không thuộc range
     return posting_date
 
+
+
+
 def csv_to_xlsx(input_file, output_file=None):
     input_file = Path(input_file)
 
@@ -134,7 +137,29 @@ def csv_to_xlsx(input_file, output_file=None):
     worksheet = workbook.active
     worksheet.title = "Sheet1"
 
+    # Các column được xem là ngày
+    DATE_COLUMNS = {
+        "Ngày giao dịch",
+        "Ngày hạch toán",
+        "Ngày giao dịch gốc",
+        "Ngày chứng từ",
+    }
+
+    # Các column được xem là số tiền
+    AMOUNT_COLUMNS = {
+        "Số tiền",
+        "Số dư",
+        "Debit",
+        "Credit",
+        "Balance",
+        "Số tiền (Bank)",
+        "Số tiền (Payment)",
+    }
+
+    # ============================================================
     # Đọc CSV
+    # ============================================================
+
     with open(
         input_file,
         "r",
@@ -144,24 +169,153 @@ def csv_to_xlsx(input_file, output_file=None):
 
         reader = csv.reader(f)
 
-        for row_index, row in enumerate(reader, start=1):
+        # --------------------------------------------------------
+        # Đọc header
+        # --------------------------------------------------------
+
+        try:
+            headers = next(reader)
+        except StopIteration:
+            print(f"[ERROR] CSV file is empty: {input_file}")
+            return
+
+        # Ghi header
+        for col_index, header in enumerate(headers, start=1):
+
+            cell = worksheet.cell(
+                row=1,
+                column=col_index
+            )
+
+            cell.value = header
+            cell.number_format = "@"
+
+        # --------------------------------------------------------
+        # Đọc data
+        # --------------------------------------------------------
+
+        for row_index, row in enumerate(reader, start=2):
 
             for col_index, value in enumerate(row, start=1):
+
+                header = headers[col_index - 1].strip()
 
                 cell = worksheet.cell(
                     row=row_index,
                     column=col_index
                 )
 
-                # Ép toàn bộ dữ liệu thành TEXT
-                cell.value = str(value)
+                value = value.strip()
 
-                # Excel Text format
-                cell.number_format = "@"
+                # ====================================================
+                # COLUMN DATE
+                # ====================================================
+
+                if header in DATE_COLUMNS:
+
+                    try:
+
+                        # Hỗ trợ:
+                        # 31/05/2026
+                        # 31/05/2026 00:00:00
+                        # 2026-05-31
+
+                        date_value = None
+
+                        for date_format in (
+                            "%d/%m/%Y",
+                            "%d/%m/%Y %H:%M:%S",
+                            "%Y-%m-%d",
+                            "%Y-%m-%d %H:%M:%S",
+                        ):
+
+                            try:
+                                date_value = datetime.strptime(
+                                    value,
+                                    date_format
+                                )
+                                break
+
+                            except ValueError:
+                                continue
+
+                        if date_value:
+
+                            cell.value = date_value
+                            cell.number_format = "dd/mm/yyyy"
+
+                        else:
+                            cell.value = value
+                            cell.number_format = "@"
+
+                    except Exception:
+                        cell.value = value
+                        cell.number_format = "@"
+
+                # ====================================================
+                # COLUMN AMOUNT
+                # ====================================================
+
+                elif header in AMOUNT_COLUMNS:
+
+                    try:
+
+                        # Remove thousand separator
+                        numeric_value = value.replace(",", "")
+
+                        if numeric_value == "":
+                            cell.value = None
+
+                        else:
+                            cell.value = float(numeric_value)
+
+                        cell.number_format = "#,##0.00"
+
+                    except (ValueError, TypeError):
+
+                        # Nếu không convert được thì giữ nguyên text
+                        cell.value = value
+                        cell.number_format = "@"
+
+                # ====================================================
+                # OTHER COLUMN
+                # ====================================================
+
+                else:
+
+                    cell.value = value
+                    cell.number_format = "@"
+
+    # ============================================================
+    # Auto width
+    # ============================================================
+
+    for column in worksheet.columns:
+
+        max_length = 0
+        column_letter = column[0].column_letter
+
+        for cell in column:
+
+            if cell.value is not None:
+
+                cell_length = len(str(cell.value))
+
+                if cell_length > max_length:
+                    max_length = cell_length
+
+        worksheet.column_dimensions[column_letter].width = min(
+            max_length + 2,
+            50
+        )
+
+    # ============================================================
+    # Save
+    # ============================================================
 
     workbook.save(output_file)
 
-    print(f"[INFO] Converted:")
+    print("[INFO] Converted:")
     print(f"       CSV : {input_file}")
     print(f"       XLSX: {output_file}")
     
@@ -1184,7 +1338,7 @@ def build_title_upc(
             elif merchant_name == "HDB":
                 return f"{merchant_name}-Lệch GD{channel_text} {business} {source}"
             elif business == "VIETJET":
-                if merchant_name == "Napas":
+                if merchant_name == "Napas" or merchant_name == "MPGS":
                     return f"{merchant_name}-Lệch GD {business}{source}"
                 elif merchant_name == "ZaloPay":
                     return f"{merchant_name}-Lệch {business} {source}"
@@ -1329,7 +1483,7 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
         elif "Xử lý Lệch" in title or "Napas-Hoàn Lệch" in title:
             if "Napas" in title:
                 if "Nạp Ví" in title:
-                    print("z"*60)
+                    # print("z"*60)
                     rtitle = title.replace("Nạp Ví", "Nạp tiền vào tài khoản ví")
                 else:
                     rtitle = title.replace("Nạp tiền Ví", "Nạp tiền TK Ví (ĐT)")

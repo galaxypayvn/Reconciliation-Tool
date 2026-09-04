@@ -1,3 +1,4 @@
 .DS_Store
 /csv_recon_report/
 /DAILY_RECON/
+__pycache__/__pycache__/

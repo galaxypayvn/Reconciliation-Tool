@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import calendar
-from datetime import datetime 
+from datetime import datetime, timedelta 
 import json
 import csv
 import re
@@ -27,6 +27,36 @@ NOTE_KEY = "Ghi chú"
 POSTING_DATE_KEY = "Ngày giao dịch"
 IS_CHARGE_KEY = "IsChargeFee"
 
+def extract_hdbank_merchant(payment_info):
+    """
+    Extract merchant name between:
+        Galaxy Pay chuyen tien cac giao dich
+    and:
+        Ndd/mm/yyyy
+
+    Examples:
+        Galaxy Pay chuyen tien cac giao dich UPC Vietjet Air N15/06/2026 (GD ND)
+            -> UPC Vietjet Air
+
+        Galaxy Pay chuyen tien cac giao dich HDI N12/06 den N14/06/2026
+            -> HDI
+    """
+
+    pattern = (
+        r"Galaxy\s+Pay\s+chuyen\s+tien\s+cac\s+giao\s+dich"
+        r"\s+(.*?)\s+N\d{1,2}/\d{1,2}/\d{4}"
+    )
+
+    match = re.search(
+        pattern,
+        payment_info,
+        re.IGNORECASE
+    )
+
+    if not match:
+        return ""
+
+    return match.group(1).strip()
 
 def get_posting_date_from_range(cell_value, file_name):
     """
@@ -146,7 +176,8 @@ def process_file_data(file_name, rows):
 
     is_recon_input = "RECON_REPORT_INPUT" in file_name
     is_daily_wallet = "DS_Daily" in file_name
-
+    is_HDBANK = "HDBANK_068704070165977" in file_name
+    is_BVB = "BVBank_0697041105669" in file_name
     # ======================================================
     # HELPER: GET POSTING DATE
     # ======================================================
@@ -172,7 +203,45 @@ def process_file_data(file_name, rows):
             )
 
         return posting_date, days_match
+    def parse_amount(value):
+            try:
+                if value in (None, ""):
+                    return 0
+                return int(float(str(value).replace(",", "")))
+            except:
+                return 0
+    def add_group(
+            merchant_name,
+            merchant_id,
+            payment_type,
+            posting_date,
+            amount,
+            note_raw
+        ):
+            if not posting_date or amount == 0:
+                return
 
+            recon_result = "MATCH_SUCCESS"
+            note_group = note_raw
+
+            group_key = (
+                merchant_name,
+                merchant_id,
+                payment_type,
+                recon_result,
+                posting_date,
+                note_group
+            )
+
+            info = grouped_data[group_key]
+
+            info["total_amount"] += amount
+            info["txn_count"] += 1
+            info["currencies"].add(currency)
+            info[POSTING_DATE_KEY] = posting_date
+
+            if not info["note_raw"]:
+                info["note_raw"] = note_raw
     # ======================================================
     # RECON_REPORT_INPUT
     # ======================================================
@@ -679,7 +748,740 @@ def process_file_data(file_name, rows):
 
             if not info["origin_date"]:
                 info["origin_date"] = origin_date
+    
+    # ======================================================
+    # HDBANK_INPUT
+    # ======================================================
+    elif is_HDBANK:
+        merchant_name = "HDBANK"
+        currency = "VND"
+        def extract_merchant_id(payment_info):
+                search_pattern =  r"BAO\s+CO\s+TID\s*:\s*(\d+)"
 
+                match = re.search(
+                    search_pattern,
+                    payment_info,
+                    re.IGNORECASE
+                )
+
+                return match.group(1) if match else "UNKNOWN"
+    
+        for index, row in enumerate(rows):
+
+            posting_date = row.get(
+                POSTING_DATE_KEY,
+                ""
+            ).strip()
+
+            if not posting_date:
+                print(
+                    "[WARN] HDBANK: "
+                    "Skip row because posting_date is empty"
+                )
+                continue
+
+            payment_info = row.get(
+                "Thông tin giao dịch",
+                ""
+            ).strip()
+
+            # ========================================================
+            # A. GALAXY PAY TRANSFER
+            # ========================================================
+
+            if (
+                "Galaxy Pay chuyen tien cac giao dich"
+                in payment_info
+            ):
+
+                merchant_name = extract_hdbank_merchant(
+                    payment_info
+                )
+
+                amount = parse_amount(
+                    row.get("Phát sinh nợ", 0)
+                )
+
+                if amount == 0:
+                    continue
+
+                # Merchant ID mapping sẽ làm sau
+                merchant_id = merchant_name
+
+                add_group(
+                    merchant_name=merchant_name,
+                    merchant_id=merchant_id,
+                    payment_type="TRANSFER",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=payment_info
+                )
+
+                continue
+
+            # ========================================================
+            # B. FEE
+            # ========================================================
+            
+            elif (
+                "Loai giao dich: VAT-Merchant Charges-2015"
+                in payment_info
+            ):
+
+                if index + 2 >= len(rows):
+                    continue
+
+                row_n1 = rows[index + 1]
+                row_n2 = rows[index + 2]
+
+                amount_n = parse_amount(
+                    row.get("Phát sinh nợ", 0)
+                )
+
+                amount_n1 = parse_amount(
+                    row_n1.get("Phát sinh nợ", 0)
+                )
+
+                amount_n2_credit = parse_amount(
+                    row_n2.get("Phát sinh có", 0)
+                )
+
+                fee_amount = amount_n + amount_n1
+
+                merchant_info = row_n2.get(
+                    "Thông tin giao dịch",
+                    ""
+                ).strip()
+
+                merchant_id = extract_merchant_id(
+                    merchant_info
+                )
+
+                add_group(
+                    merchant_name="HDBANK",
+                    merchant_id=merchant_id,
+                    payment_type="FEE",
+                    posting_date=posting_date,
+                    amount=fee_amount,
+                    note_raw=merchant_info
+                )
+
+                # amount_n2_credit chưa tạo group
+                # sẽ xử lý ở bước tiếp theo
+
+                continue
+
+            # ========================================================
+            # C. CÁC BÁO CÓ
+            # ========================================================
+
+            # MOMO
+            elif "MOMO TT GALAXY PAY" in payment_info:
+
+                amount = parse_amount(
+                    row.get("Phát sinh có", 0)
+                )
+
+                add_group(
+                    merchant_name="MOMO",
+                    merchant_id="GPay",
+                    payment_type="PAYMENT",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=""
+                )
+
+                continue
+
+            # NAPAS
+            elif "NAPAS BAO CO GD THANH TOAN" in payment_info:
+
+                amount = parse_amount(
+                    row.get("Phát sinh có", 0)
+                )
+
+                add_group(
+                    merchant_name="NAPAS",
+                    merchant_id="GPay",
+                    payment_type="PAYMENT",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=""
+                )
+
+                continue
+
+            # ZALOPAY
+            elif "TT GD QUA VI ZALOPAY" in payment_info:
+
+                amount = parse_amount(
+                    row.get("Phát sinh có", 0)
+                )
+
+                add_group(
+                    merchant_name="ZALOPAY",
+                    merchant_id="GPay",
+                    payment_type="PAYMENT",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=""
+                )
+
+                continue
+
+            # LÃI
+            elif "TRA LAI TIEN GUI" in payment_info:
+
+                amount = parse_amount(
+                    row.get("Phát sinh có", 0)
+                )
+
+                add_group(
+                    merchant_name="HDBANK",
+                    merchant_id="GPay",
+                    payment_type="DEPOSITS_INTEREST",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=payment_info
+                )
+
+                continue
+            elif "So giao dich" in payment_info:
+                amount = parse_amount(
+                    row.get("Phát sinh có", 0)
+                )
+
+                add_group(
+                    merchant_name="HDBANK",
+                    merchant_id="GD-QR",
+                    payment_type="PAYMENT",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=""
+                )
+            elif "vietjet air" in merchant_id.lower():
+                amount = parse_amount(
+                    row.get("Phát sinh có", 0)
+                )
+
+                add_group(
+                    merchant_name="HDBANK",
+                    merchant_id="VIETJET",
+                    payment_type="PAYMENT",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=""
+                )
+            else:
+                amount = parse_amount(
+                    row.get("Phát sinh có", 0)
+                )
+
+                add_group(
+                    merchant_name="HDBANK",
+                    merchant_id=f"GD-QR-{merchant_id}",
+                    payment_type="PAYMENT",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=""
+                )
+
+                
+                
+    elif is_BVB:
+        # ============================================================
+        # PREPARE ROW DATA
+        # ============================================================
+        merchant_name = "BVBANK"
+        currency = "VND"
+        processed_rows = []
+
+        for index, row in enumerate(rows):
+
+            posting_date = row.get(
+                "NGÀY GIAO DỊCH\n(Transaction Date)",
+                ""
+            )
+
+            posting_date = (
+                str(posting_date).strip()
+                if posting_date is not None
+                else ""
+            )
+
+            payment_info = row.get(
+                "DIỄN GIẢI\n(Narrative)",
+                ""
+            )
+
+            payment_info = (
+                str(payment_info).strip()
+                if payment_info is not None
+                else ""
+            )
+
+            debit_amount = parse_amount(
+                row.get(
+                    "PHÁT SINH NỢ\n(Debit Amount)",
+                    0
+                )
+            )
+
+            credit_amount = parse_amount(
+                row.get(
+                    "PHÁT SINH CÓ\n(Credit Amount)",
+                    0
+                )
+            )
+
+            processed_rows.append({
+                "index": index,
+                "row": row,
+                "posting_date": posting_date,
+                "payment_info": payment_info,
+                "debit_amount": debit_amount,
+                "credit_amount": credit_amount
+            })
+
+        # ============================================================
+        # 1. PHÁT SINH NỢ
+        # ============================================================
+
+        for item in processed_rows:
+
+            posting_date = item["posting_date"]
+            payment_info = item["payment_info"]
+            debit_amount = item["debit_amount"]
+
+            if not posting_date:
+                print(
+                    "[WARN] BVBANK: "
+                    "Skip debit row because posting_date is empty"
+                )
+                continue
+
+            if debit_amount == 0:
+                continue
+
+            # --------------------------------------------------------
+            # 1.1 GALAXY PAY CHUYEN TIEN
+            #
+            # Nếu diễn giải giống nhau:
+            #   dòng trên = chuyển tiền
+            #   dòng dưới = phí
+            #
+            # Mỗi dòng hạch toán riêng
+            # --------------------------------------------------------
+
+            if "Galaxy Pay chuyen tien" in payment_info:
+
+                # ----------------------------------------------------
+                # Kiểm tra dòng tiếp theo
+                # ----------------------------------------------------
+
+                current_index = item["index"]
+
+                next_item = None
+
+                if current_index + 1 < len(processed_rows):
+                    next_item = processed_rows[
+                        current_index + 1
+                    ]
+
+                payment_type = "TRANSFER"
+
+                if next_item:
+
+                    next_info = next_item["payment_info"]
+
+                    # Nếu dòng tiếp theo có cùng diễn giải
+                    if (
+                        next_info
+                        and next_info == payment_info
+                    ):
+                        add_group(
+                        merchant_name=merchant_name,
+                        merchant_id="GPay",
+                        payment_type=payment_type,
+                        posting_date=posting_date,
+                        amount=debit_amount,
+                        note_raw=payment_info
+                    )
+                        add_group(
+                        merchant_name=merchant_name,
+                        merchant_id="GPay",
+                        payment_type="FEE",
+                        posting_date=posting_date,
+                        amount=next_item["debit_amount"],
+                        note_raw=next_info
+                    )
+
+                
+
+                continue
+
+            # --------------------------------------------------------
+            # 1.2 GALAXY PAY YEU CAU HOAN TRA
+            # --------------------------------------------------------
+
+            if "GALAXY PAY YEU CAU HOAN TRA" in payment_info:
+
+                add_group(
+                    merchant_name=merchant_name,
+                    merchant_id="GPay",
+                    payment_type="REFUND",
+                    posting_date=posting_date,
+                    amount=debit_amount,
+                    note_raw=payment_info
+                )
+
+                continue
+
+        # ============================================================
+        # 2. PHÁT SINH CÓ
+        # ============================================================
+
+        # ------------------------------------------------------------
+        # 2.1 LÃI TIỀN GỬI
+        #
+        # Cộng toàn bộ "TRA LAI TIEN GUI"
+        # trong toàn bộ file thành 1 group
+        # ------------------------------------------------------------
+
+        total_interest = 0
+
+        interest_posting_date = ""
+
+        for item in processed_rows:
+
+            payment_info = item["payment_info"]
+            credit_amount = item["credit_amount"]
+            posting_date = item["posting_date"]
+
+            if "TRA LAI TIEN GUI" in payment_info:
+
+                total_interest += credit_amount
+
+                if not interest_posting_date and posting_date:
+                    interest_posting_date = posting_date
+
+        if total_interest > 0:
+
+            add_group(
+                merchant_name=merchant_name,
+                merchant_id="GPay",
+                payment_type="PAYMENT_INTEREST",
+                posting_date=interest_posting_date,
+                amount=total_interest,
+                note_raw="TRA LAI TIEN GUI"
+            )
+
+        # ============================================================
+        # 2.2 PHẦN CÒN LẠI
+        # ============================================================
+
+        # Loại các dòng lãi
+        credit_rows = [
+            item
+            for item in processed_rows
+            if (
+                item["credit_amount"] != 0
+                and "TRA LAI TIEN GUI" not in item["payment_info"]
+            )
+        ]
+
+        # ============================================================
+        # TÌM CÁC HEADER 23:00 - 23:59
+        #
+        # Header 23:00 - 23:59 là GIAO DỊCH CUỐI NGÀY
+        #
+        # Ví dụ:
+        #
+        # 01/06 transaction A
+        # 01/06 transaction B
+        # 01/06 23:00 - 23:59   <-- kết thúc ngày 01/06
+        #
+        # 02/06 transaction C
+        # 02/06 transaction D
+        # 02/06 23:00 - 23:59   <-- kết thúc ngày 02/06
+        #
+        # => Amount của mỗi ngày được cộng từ:
+        #    previous header + 1
+        #    đến chính header hiện tại
+        # ============================================================
+
+        daily_amounts = defaultdict(int)
+
+        current_amount = 0
+        current_date = None
+
+        for item in credit_rows:
+
+            payment_info = item["payment_info"]
+            credit_amount = item["credit_amount"]
+
+            # ========================================================
+            # HEADER 23:00 - 23:59
+            #
+            # Header này nói rõ:
+            # "ngay 31/05/2026"
+            #
+            # => amount trước đó thuộc về 31/05
+            # ========================================================
+
+            if "Giao dich tu 23:00:00 den 23:59:59" in payment_info:
+
+                match = re.search(
+                    r"ngay\s+(\d{2}/\d{2}/\d{4})",
+                    payment_info
+                )
+
+                if match:
+
+                    header_date = datetime.strptime(
+                        match.group(1),
+                        "%d/%m/%Y"
+                    ).date()
+
+                    current_amount += credit_amount
+
+                    if current_amount != 0:
+                        daily_amounts[header_date] += current_amount
+
+                    current_amount = 0
+                    current_date = None
+
+                continue
+
+            # ========================================================
+            # Transaction bình thường
+            # ========================================================
+
+            posting_date = item["posting_date"]
+
+            if not posting_date:
+                continue
+
+            try:
+                item_date = datetime.strptime(
+                    posting_date,
+                    "%d/%m/%Y"
+                ).date()
+
+            except ValueError:
+                continue
+
+            # Nếu bắt đầu một ngày mới
+            if current_date is None:
+                current_date = item_date
+
+            # Nếu ngày thay đổi mà chưa gặp header
+            elif item_date != current_date:
+
+                if current_amount != 0:
+                    daily_amounts[current_date] += current_amount
+
+                current_date = item_date
+                current_amount = 0
+
+            current_amount += credit_amount
+
+
+        # ============================================================
+        # PHẦN CUỐI FILE
+        # ============================================================
+
+        if current_date is not None and current_amount != 0:
+            daily_amounts[current_date] += current_amount
+
+        # ============================================================
+        # 2.3 XÁC ĐỊNH CÁCH GOM THEO THÁNG
+        # ============================================================
+
+        monthly_amounts = defaultdict(int)
+
+        daily_items = {}
+
+        for date_obj, amount in daily_amounts.items():
+
+            month_key = (
+                date_obj.year,
+                date_obj.month
+            )
+
+            daily_items[date_obj] = amount
+
+            monthly_amounts[month_key] += amount
+
+        # ============================================================
+        # GROUP WEEKEND
+        #
+        # Thứ 6 + Thứ 7 + Chủ nhật
+        # => Gom thành 1 dòng, posting_date = Chủ nhật
+        #
+        # Nếu weekend crossing month:
+        #
+        # 31/07 (Fri)
+        # 01/08 (Sat)
+        # 02/08 (Sun)
+        #
+        # => Không gom chung
+        # ============================================================
+
+        processed_dates = set()
+
+        sorted_dates = sorted(daily_items.keys())
+
+        for friday in sorted_dates:
+
+            # Chỉ bắt đầu từ Thứ 6
+            if friday.weekday() != 4:
+                continue
+
+            saturday = friday + timedelta(days=1)
+            sunday = friday + timedelta(days=2)
+
+            # ========================================================
+            # Phải có đủ Fri + Sat + Sun
+            # ========================================================
+
+            if (
+                saturday not in daily_items
+                or sunday not in daily_items
+            ):
+                continue
+
+            # ========================================================
+            # Không cho phép weekend crossing month
+            # ========================================================
+
+            if not (
+                friday.year == saturday.year == sunday.year
+                and friday.month == saturday.month == sunday.month
+            ):
+                continue
+
+            # ========================================================
+            # Gom Fri + Sat + Sun
+            # Posting date = Sunday
+            # ========================================================
+
+            weekend_amount = (
+                daily_items[friday]
+                + daily_items[saturday]
+                + daily_items[sunday]
+            )
+
+            if weekend_amount == 0:
+                continue
+
+            add_group(
+                merchant_name=merchant_name,
+                merchant_id="GPay",
+                payment_type="PAYMENT",
+                posting_date=sunday.strftime("%d/%m/%Y"),
+                amount=weekend_amount,
+                note_raw="BVBANK WEEKEND"
+            )
+
+            # Đánh dấu đã xử lý
+            processed_dates.update([
+                friday,
+                saturday,
+                sunday
+            ])
+
+
+        # ============================================================
+        # CÁC NGÀY CÒN LẠI
+        # ============================================================
+
+        for date_obj in sorted(daily_items.keys()):
+
+            if date_obj in processed_dates:
+                continue
+
+            amount = daily_items[date_obj]
+
+            if amount == 0:
+                continue
+
+            add_group(
+                merchant_name=merchant_name,
+                merchant_id="GPay",
+                payment_type="PAYMENT",
+                posting_date=date_obj.strftime("%d/%m/%Y"),
+                amount=amount,
+                note_raw="BVBANK PAYMENT"
+            )
+    #     # ============================================================
+    #     # 2.4 HẠCH TOÁN
+    #     # ============================================================
+
+    #     processed_dates = set()
+
+    #     for friday in sorted(daily_items.keys()):
+
+    #         if friday.weekday() != 4:
+    #             continue
+
+    #         saturday = friday + timedelta(days=1)
+    #         sunday = friday + timedelta(days=2)
+
+    #         # Phải đủ Fri + Sat + Sun
+    #         if (
+    #             saturday not in daily_items
+    #             or sunday not in daily_items
+    #         ):
+    #             continue
+
+    #         # Không cho phép crossing month
+    #         if not (
+    #             friday.year == saturday.year == sunday.year
+    #             and friday.month == saturday.month == sunday.month
+    #         ):
+    #             continue
+
+    #         weekend_amount = (
+    #             daily_items[friday]
+    #             + daily_items[saturday]
+    #             + daily_items[sunday]
+    #         )
+
+    #         add_group(
+    #             merchant_name=merchant_name,
+    #             merchant_id="GPay",
+    #             payment_type="PAYMENT",
+    #             posting_date=sunday.strftime("%d/%m/%Y"),
+    #             amount=weekend_amount,
+    #             note_raw="BVBANK WEEKEND"
+    #         )
+
+    #         processed_dates.update([
+    #     friday,
+    #     saturday,
+    #     sunday
+    # ])
+    #     # ------------------------------------------------------------
+    #     # Các ngày còn lại
+    #     # ------------------------------------------------------------
+
+    #     for date_obj in sorted(daily_items.keys()):
+
+    #         if date_obj in processed_dates:
+    #             continue
+
+    #         amount = daily_items[date_obj]
+
+    #         add_group(
+    #             merchant_name=merchant_name,
+    #             merchant_id="GPay",
+    #             payment_type="PAYMENT",
+    #             posting_date=date_obj.strftime("%d/%m/%Y"),
+    #             amount=amount,
+    #             note_raw="BVBANK PAYMENT"
+    #         )
+            
     # ======================================================
     # BUILD JSON
     # ======================================================
@@ -821,7 +1623,7 @@ def main():
 
     for file_name, file_content in recon_data.items():
         final[file_name] = process_file_data(file_name, file_content.get("data", []))
-
+        
     export_summary_to_json(final)
     export_to_csv(SUMMARY_JSON_FILE, SUMMARY_CSV_FILE)
 
