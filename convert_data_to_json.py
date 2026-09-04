@@ -8,13 +8,13 @@ import shutil
 from typing import Dict, Any, List
 import pandas as pd
 
-INPUT_FOLDER = "./DAILY_RECON/UPC"
+INPUT_FOLDER = "DAILY_RECON/UPC"
 FILE_PREFIX = "RECON_REPORT_INPUT"
-WALLET_INPUT_FOLDER = "./DAILY_RECON/WALLET"
+WALLET_INPUT_FOLDER = "DAILY_RECON/WALLET"
 WALLET_FILE_PREFIX = "DS_Daily_gui"
-CSV_FOLDER = "./csv_recon_report"
+CSV_FOLDER = "csv_recon_report"
 OUTPUT_JSON = f"{CSV_FOLDER}/recon_export.json"
-BANK_STATEMENT_FOLDER = "./DAILY_RECON/STATEMENT"
+BANK_STATEMENT_FOLDER = "DAILY_RECON/STATEMENT"
 BANK_STATEMENT_FILE_PREFIX = "BANK"
 
 def convert_xls_to_csv(source_folder, file_prefix, output_folder):
@@ -87,6 +87,7 @@ def convert_xls_to_csv(source_folder, file_prefix, output_folder):
                     f"{xls_file.name} / {sheet_name}"
                     f" -> {csv_file.name}"
                 )
+                
 
         except Exception as e:
             print(
@@ -288,6 +289,17 @@ def scan_csv_folder() -> Dict[str, Any]:
                 f"[ERROR] Failed "
                 f"{csv_file.name}: {exc}"
             )
+            try:
+                csv_file.unlink()
+                print(
+                    f"[INFO] Deleted invalid CSV: "
+                    f"{csv_file.name}"
+                )
+            except Exception as delete_error:
+                print(
+                    f"[ERROR] Cannot delete CSV "
+                    f"{csv_file.name}: {delete_error}"
+                )
 
     return result
 
