@@ -29,34 +29,151 @@ IS_CHARGE_KEY = "IsChargeFee"
 
 def extract_hdbank_merchant(payment_info):
     """
-    Extract merchant name between:
-        Galaxy Pay chuyen tien cac giao dich
-    and:
-        Ndd/mm/yyyy
+    Extract merchant name from Galaxy Pay transfer descriptions.
 
-    Examples:
+    Supported examples:
         Galaxy Pay chuyen tien cac giao dich UPC Vietjet Air N15/06/2026 (GD ND)
             -> UPC Vietjet Air
 
         Galaxy Pay chuyen tien cac giao dich HDI N12/06 den N14/06/2026
             -> HDI
+
+        Galaxy Pay chuyen tien cac GD HDI N01/06/2026
+            -> HDI
+
+        Galaxy Pay chuyen tien VSSS (Victoria International School) N12/06 den N14/06/2026
+            -> VSSS (Victoria International School)
+
+        Galaxy Pay chuyen tien cac giao dich Galaxy Telecom tu N05/06 den N07/06/2026
+            -> Galaxy Telecom
     """
 
-    pattern = (
-        r"Galaxy\s+Pay\s+chuyen\s+tien\s+cac\s+giao\s+dich"
-        r"\s+(.*?)\s+N\d{1,2}/\d{1,2}/\d{4}"
-    )
+    patterns = [
+        # ============================================================
+        # 1. Galaxy Pay chuyen tien cac giao dich <merchant>
+        #    Galaxy Pay chuyen tien cac GD <merchant>
+        #
+        # Examples:
+        #   Galaxy Pay chuyen tien cac giao dich HDI N12/06 den N14/06/2026
+        #   Galaxy Pay chuyen tien cac giao dich Galaxy Telecom N1516/06/2026
+        #   Galaxy Pay chuyen tien cac giao dich Galaxy Telecom tu N05/06 den N07/06/2026
+        # ============================================================
+        (
+            r"Galaxy\s+Pay\s+chuyen\s+tien\s+cac\s+"
+            r"(?:giao\s+dich|GD)"
+            r"\s+(.*?)\s+"
+            r"(?:tu\s+)?"
+            r"N\d{1,4}/\d{1,2}"
+            r"(?:\s+(?:den|va)\s+N\d{1,2}/\d{1,2})?"
+            r"(?:\s+(?:den|va)\s+N\d{1,2}/\d{1,2})?"
+            r"/\d{4}"
+        ),
 
-    match = re.search(
-        pattern,
-        payment_info,
-        re.IGNORECASE
-    )
+        # ============================================================
+        # 2. Galaxy Pay chuyen tien <merchant>
+        #
+        # Examples:
+        #   Galaxy Pay chuyen tien VSSS (Victoria International School)
+        #       N12/06 den N14/06/2026
+        #
+        #   Galaxy Pay chuyen tien Truong Khai HoanNSG N16/06/2026
+        #   Galaxy Pay chuyen tien Truong Khai HoanNSG N01/06/2026
+        # ============================================================
+        (
+            r"Galaxy\s+Pay\s+chuyen\s+tien\s+"
+            r"(.*?)\s+"
+            r"N\d{1,4}/\d{1,2}"
+            r"(?:\s+(?:den|va)\s+N\d{1,2}/\d{1,2})?"
+            r"(?:\s+(?:den|va)\s+N\d{1,2}/\d{1,2})?"
+            r"/\d{4}"
+        ),
+    ]
 
-    if not match:
-        return ""
+    for pattern in patterns:
+        match = re.search(
+            pattern,
+            payment_info,
+            re.IGNORECASE
+        )
 
-    return match.group(1).strip()
+        if match:
+            return match.group(1).strip()
+
+    return "CAN_NOT_EXTRACT_MERCHANT_ID"
+def extract_bvbank_merchant(payment_info):
+    """
+    Extract merchant name from Galaxy Pay transfer descriptions.
+
+    Supported examples:
+        Galaxy Pay chuyen tien cac GD QR Code VIETJET N31/05/2026
+            -> VIETJET
+
+        Galaxy Pay chuyen tien cac GD QR Code VIETJET N29-30/05/2026
+            -> VIETJET
+
+       Galaxy Pay chuyen tien VSSS Victoria International School N29-31/05/2026 GD QR va bu tru phi T04/2026
+            -> VSSS Victoria International School
+
+        Galaxy Pay chuyen tien cac giao dich ONAIR N11/06/2026 GD QR
+            -> ONAIR
+
+        Galaxy Pay chuyen tien cac  GD QR Code Galaxy Telecom N29-31/05/2026
+            -> Galaxy Telecom
+        
+        Galaxy Pay chuyen tien cac GD QR CODE Truong Khai Hoan-NAM SG N10/062026
+            -> Truong Khai Hoan-NAM SG
+
+    """
+
+    patterns = [
+        # Galaxy Pay chuyen tien cac giao dich <merchant> Ndd/mm/yyyy
+        # Example:
+        # Galaxy Pay chuyen tien cac giao dich ONAIR N11/06/2026
+        (
+            r"Galaxy\s+Pay\s+chuyen\s+tien\s+cac\s+"
+            r"giao\s+dich\s+"
+            r"(.*?)\s+"
+            r"N\d{1,2}(?:-\d{1,2})?"
+            r"/\d{1,2}/?\d{4}"
+        ),
+
+        # Galaxy Pay chuyen tien cac GD QR Code <merchant> Ndd/mm/yyyy
+        # Example:
+        # Galaxy Pay chuyen tien cac GD QR Code VIETJET N31/05/2026
+        #
+        # QR Code is optional
+        # so it also supports:
+        # Galaxy Pay chuyen tien cac GD Galaxy Telecom N29-31/05/2026
+        (
+            r"Galaxy\s+Pay\s+chuyen\s+tien\s+cac\s+"
+            r"GD(?:\s+QR\s+Code)?\s+"
+            r"(.*?)\s+"
+            r"N\d{1,2}(?:-\d{1,2})?"
+            r"/\d{1,2}/?\d{4}"
+        ),
+
+        # Galaxy Pay chuyen tien <merchant> Ndd/mm/yyyy
+        # Example:
+        # Galaxy Pay chuyen tien VSSS Victoria International School N29-31/05/2026
+        (
+            r"Galaxy\s+Pay\s+chuyen\s+tien\s+"
+            r"(.*?)\s+"
+            r"N\d{1,2}(?:-\d{1,2})?"
+            r"/\d{1,2}/?\d{4}"
+        ),
+    ]
+
+    for pattern in patterns:
+        match = re.search(
+            pattern,
+            payment_info,
+            re.IGNORECASE
+        )
+
+        if match:
+            return match.group(1).strip()
+
+    return "CAN_NOT_EXTRACT_MERCHANT_ID"
 
 def get_posting_date_from_range(cell_value, file_name):
     """
@@ -784,15 +901,12 @@ def process_file_data(file_name, rows):
                 "Thông tin giao dịch",
                 ""
             ).strip()
-
+            
             # ========================================================
             # A. GALAXY PAY TRANSFER
             # ========================================================
 
-            if (
-                "Galaxy Pay chuyen tien cac giao dich"
-                in payment_info
-            ):
+            if ("Galaxy Pay chuyen tien" in payment_info ):
 
                 merchant_name = extract_hdbank_merchant(
                     payment_info
@@ -874,7 +988,26 @@ def process_file_data(file_name, rows):
             # ========================================================
             # C. CÁC BÁO CÓ
             # ========================================================
+            elif "Noi dung: BAO CO TID" in payment_info:
 
+                amount = parse_amount(
+                    row.get("Phát sinh có", 0)
+                )
+
+                merchant_id = extract_merchant_id(
+                    payment_info
+                )
+
+                add_group(
+                    merchant_name="HDBANK",
+                    merchant_id=merchant_id,
+                    payment_type="PAYMENT_RECEIVED",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=payment_info
+                )
+
+                continue
             # MOMO
             elif "MOMO TT GALAXY PAY" in payment_info:
 
@@ -885,7 +1018,7 @@ def process_file_data(file_name, rows):
                 add_group(
                     merchant_name="MOMO",
                     merchant_id="GPay",
-                    payment_type="PAYMENT",
+                    payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
                     note_raw=""
@@ -903,7 +1036,7 @@ def process_file_data(file_name, rows):
                 add_group(
                     merchant_name="NAPAS",
                     merchant_id="GPay",
-                    payment_type="PAYMENT",
+                    payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
                     note_raw=""
@@ -921,7 +1054,7 @@ def process_file_data(file_name, rows):
                 add_group(
                     merchant_name="ZALOPAY",
                     merchant_id="GPay",
-                    payment_type="PAYMENT",
+                    payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
                     note_raw=""
@@ -946,20 +1079,7 @@ def process_file_data(file_name, rows):
                 )
 
                 continue
-            elif "So giao dich" in payment_info:
-                amount = parse_amount(
-                    row.get("Phát sinh có", 0)
-                )
-
-                add_group(
-                    merchant_name="HDBANK",
-                    merchant_id="GD-QR",
-                    payment_type="PAYMENT",
-                    posting_date=posting_date,
-                    amount=amount,
-                    note_raw=""
-                )
-            elif "vietjet air" in merchant_id.lower():
+            elif "vietjet air" in payment_info.lower():
                 amount = parse_amount(
                     row.get("Phát sinh có", 0)
                 )
@@ -967,11 +1087,26 @@ def process_file_data(file_name, rows):
                 add_group(
                     merchant_name="HDBANK",
                     merchant_id="VIETJET",
-                    payment_type="PAYMENT",
+                    payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=""
+                    note_raw=payment_info
                 )
+                continue
+            elif "So giao dich" in payment_info:
+                amount = parse_amount(
+                    row.get("Phát sinh có", 0)
+                )
+
+                add_group(
+                    merchant_name="HDBANK",
+                    merchant_id="QR",
+                    payment_type="PAYMENT_RECEIVED",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=f"Phát sinh có GD-QR {posting_date}"
+                )
+                continue
             else:
                 amount = parse_amount(
                     row.get("Phát sinh có", 0)
@@ -979,11 +1114,11 @@ def process_file_data(file_name, rows):
 
                 add_group(
                     merchant_name="HDBANK",
-                    merchant_id=f"GD-QR-{merchant_id}",
-                    payment_type="PAYMENT",
+                    merchant_id=f"GD-QR",
+                    payment_type="PAYMENT_INTERNAL",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=""
+                    note_raw= payment_info
                 )
 
                 
@@ -1089,7 +1224,7 @@ def process_file_data(file_name, rows):
                     ]
 
                 payment_type = "TRANSFER"
-
+                merchant_id = extract_bvbank_merchant(payment_info)
                 if next_item:
 
                     next_info = next_item["payment_info"]
@@ -1101,7 +1236,7 @@ def process_file_data(file_name, rows):
                     ):
                         add_group(
                         merchant_name=merchant_name,
-                        merchant_id="GPay",
+                        merchant_id=merchant_id,
                         payment_type=payment_type,
                         posting_date=posting_date,
                         amount=debit_amount,
@@ -1132,7 +1267,7 @@ def process_file_data(file_name, rows):
                     payment_type="REFUND",
                     posting_date=posting_date,
                     amount=debit_amount,
-                    note_raw=payment_info
+                    note_raw="GALAXY PAY YEU CAU HOAN TRA"
                 )
 
                 continue

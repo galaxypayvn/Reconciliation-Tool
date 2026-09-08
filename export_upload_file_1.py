@@ -1294,7 +1294,7 @@ def build_title_upc(
     channel_mapping = {
         "MOMO": "UPC",
         "NAPAS": "UPC",
-        "HDB_MPGS": "UPC",
+        "HDB_MPGS": "",
         "GPAY": "TT",
 
         "VCCB": "QR",
@@ -1338,7 +1338,7 @@ def build_title_upc(
             elif merchant_name == "HDB":
                 return f"{merchant_name}-Lệch GD{channel_text} {business} {source}"
             elif business == "VIETJET":
-                if merchant_name == "Napas" or merchant_name == "MPGS":
+                if merchant_name == "Napas":
                     return f"{merchant_name}-Lệch GD {business}{source}"
                 elif merchant_name == "ZaloPay":
                     return f"{merchant_name}-Lệch {business} {source}"
@@ -1378,6 +1378,210 @@ def build_title_upc(
                 return f"{merchant_name}-DV IBFT Hoàn GD QR"
             return f"{merchant_name}-HLệch {business} {source}"
 
+    return f"{merchant_name}-{payment_type} {merchant_id} {recon_result} {note}"
+def build_title_hdbank(
+        merchant,
+        payment_type,
+        merchant_id,
+        recon_result,
+        note
+):
+    merchant = merchant.strip()
+    payment_type = payment_type.strip().upper()
+    recon_result = recon_result.strip().upper()
+    note_lower = note.lower().strip()
+    merchant_name = merchant
+    
+    if merchant == "HDBANK" and payment_type == "PAYMENT_RECEIVED":
+        merchant_name = "MPGS"
+    elif merchant_id == "GPay" and payment_type == "PAYMENT_RECEIVED":
+        match merchant_name:
+            case "MOMO":
+                merchant_id = "UPC"
+            case "ZALOPAY":
+                merchant_id = "VIETJET"
+            case "NAPAS":
+                merchant_id = "Cổng" 
+    elif "VSSS" in merchant_id:
+        merchant_id = "VSSS"
+    match merchant_name:
+        case "MOMO":
+            merchant_name = "Momo"
+        case "ZALOPAY":
+            merchant_name = "ZaloPay"
+        case "NAPAS":
+            merchant_name = "Napas" 
+        case "HDBANK":
+            merchant_name = "HDB"
+    # =======================
+    # Mapping Merchant ID
+    # =======================
+    merchant_mapping = {
+        "32400458": "SKYFI",
+        "06800680": "GJOY",
+        "06800948": "VIETJET",
+        "32400035": "KH-RVS",
+        "32400036": "KH-NSG",
+        "32400629": "MENAS",
+        "UPC Vietjet Air": "VIETJET",
+        "Galaxy Telecom": "SKYFI",
+        "Galaxy Joy": "-GJoy",
+        "UPC MPGS Vietjet Air": "VIETJET",
+        "HDI": "-HDI",
+        "HDI Portal": "-HDI",
+        "Rong Viet Travel": "-RồngViệt",
+        "32400034": "ONAIR",
+        "06800950": "SBH",
+        "06800902": "HDI",
+        "06800891": "VSSS",
+        "06800681": "RỒNG VIỆT",
+        "Truong Khai HoanRIVERSIDE": "KH-RVS",
+        "Truong Khai Hoan-RIVERSIDE": "KH-RVS",
+        "Truong Khai HoanNSG": "-NSG",
+        "Menas Store": "-Menas",
+        "ONAIR": "-OnAir",
+        "SBH": "-SBH",
+    }
+
+    business = merchant_mapping.get(merchant_id, merchant_id)
+
+    # =======================
+    # Channel mapping
+    # =======================
+    channel_mapping = {
+        "MOMO": "BC DV",
+        "UPC Vietjet Air": "UPC",
+        "UPC MPGS Vietjet Air": "UPC",
+        "Galaxy Telecom": "UPC",
+        "Galaxy Joy": "GD UPC",
+        "HDI": "GD UPC",
+        "HDI Portal": "GD UPC",
+        "Truong Khai HoanNSG": "GD UPC",
+        "Rong Viet Travel": "-RồngViệt",
+        "Menas Store": "GD UPC",
+        "ONAIR": "GD UPC",
+        "SBH": "GD UPC",
+        "UPC SBH": "GD UPC",
+        "Rong Viet Travel": "UPC",
+        "VSSS": "UPC",
+
+    }
+
+    channel = channel_mapping.get(
+        merchant,
+            "BC GD"
+        )
+    channel_text = f"{channel}" if channel else ""   
+    if not business.startswith("-"):
+            business = f" {business}"
+
+    # ============================================
+    # PAYMENT_RECEIVED
+    # ============================================
+    if payment_type == "PAYMENT_RECEIVED":
+        if merchant_id == "QR":
+            return f"HDB-Báo có GD QR"
+        return f"{merchant_name}-{channel_text}{business}"
+            
+    elif payment_type == "FEE":
+        return f"HDB-MPGS Phí GD {business}"
+
+    elif payment_type == "TRANSFER":
+        if business == " KH-RVS":
+            return f"Ch.tien UPC-KH Riverside"
+        
+        return f"Chuyển tiền {channel_text}{business}"
+    elif payment_type == "DEPOSITS_INTEREST":
+        return f"Lãi tiền gửi"
+    elif payment_type == "PAYMENT_INTERNAL":
+        return f"Chuyển tiền nội bộ {note}"
+    return f"{merchant_name}-{payment_type} {merchant_id} {recon_result} {note}"
+
+def build_title_bvb(
+        merchant,
+        payment_type,
+        merchant_id,
+        recon_result,
+        note
+):
+    merchant = merchant.strip()
+    payment_type = payment_type.strip().upper()
+    recon_result = recon_result.strip().upper()
+    note_lower = note.lower().strip()
+    merchant_name = merchant
+    
+    if "VIETJET" in merchant_id:
+        merchant_id = "VIETJET"
+    elif "VSSS" in merchant_id:
+        merchant_id = "VSSS"
+    match merchant_name:
+        case "BVBANK":
+            merchant_name = "BVB"
+        
+    # =======================
+    # Mapping Merchant ID
+    # =======================
+    merchant_mapping = {
+        
+        "UPC Vietjet Air": "VIETJET",
+        "Galaxy Telecom": "SKYFI",
+        "Galaxy Joy": "GJoy",
+        "UPC MPGS Vietjet Air": "VIETJET",
+        "HDI": "HDI",
+        "Rong Viet Travel": "Rồng Việt",
+        "GPay": "QR",
+        "ONAIR": "OnAir",
+        "VIETJET": "Vietjet",
+        "Truong Khai Hoan-NAM SG": "-NSG",
+        "Truong Khai HoanRIVERSIDE": "KH-RVS",
+        "Truong Khai Hoan-RIVERSIDE": "KH-RVS",
+        "VSSS": "VSSS",
+    }
+
+    business = merchant_mapping.get(merchant_id, merchant_id)
+
+    # =======================
+    # Channel mapping
+    # =======================
+    channel_mapping = {
+        "MOMO": "BC DV",
+        "UPC Vietjet Air": "UPC",
+        "UPC MPGS Vietjet Air": "UPC",
+        "Galaxy Telecom": "UPC",
+        "Galaxy Joy": "GD UPC",
+        "HDI": "GD UPC",
+        "Rong Viet Travel": "-RồngViệt",
+
+    }
+
+    channel = channel_mapping.get(
+        merchant,
+            "BC GD"
+        )
+    channel_text = f"{channel}" if channel else ""   
+
+    if not business.startswith("-"):
+            business = f" {business}"
+    # ============================================
+    # PAYMENT_RECEIVED
+    # ============================================
+    if payment_type == "PAYMENT":
+        
+        return f"{merchant_name}-{channel_text}{business}"
+            
+    elif payment_type == "FEE":
+        return f"BVB-Phí chuyển tiền"
+
+    elif payment_type == "TRANSFER":
+        if business == " KH-RVS":
+            return f"Ch.tiền QR-KH Riverside"
+        return f"Chuyển tiền QR{business}"
+    
+    elif payment_type == "PAYMENT_INTEREST":
+        return f"Lãi tiền gửi"
+    elif payment_type == "REFUND":
+        return f"BVB-Cắt tiền H.Lệch QR VJ"
+    
     return f"{merchant_name}-{payment_type} {merchant_id} {recon_result} {note}"
 
 
@@ -1617,9 +1821,12 @@ def main():
             # ===== TITLE =====
             if "RECON" in file_name.upper():
                 title = build_title_upc(merchant,payment_type,merchant_id,recon_result,note)
-            else:
+            elif "DAILY" in file_name.upper():
                 title = build_title_wallet(merchant,payment_type,merchant_id,recon_result,note)
-
+            elif "HDBANK" in file_name.upper():
+                title = build_title_hdbank(merchant,payment_type,merchant_id,recon_result,note)
+            elif "SAOKE" in file_name.upper():
+                title = build_title_bvb(merchant,payment_type,merchant_id,recon_result,note)
             if "XLý Lệch Nạp tiền Ví" in title or "HLệch Nạp Ví (ĐT)" in title or "XLLệch Nạp tiền Ví" in title or "HLệch Rút tiền Ví" in title:
                 accounting_date = parse_posting_date_from_filename(file_name)
             
