@@ -870,7 +870,7 @@ def process_file_data(file_name, rows):
     # HDBANK_INPUT
     # ======================================================
     elif is_HDBANK:
-        merchant_name = "HDBANK"
+        merchant_name = "HDBANK_STATEMENT"
         currency = "VND"
         def extract_merchant_id(payment_info):
                 search_pattern =  r"BAO\s+CO\s+TID\s*:\s*(\d+)"
@@ -908,7 +908,7 @@ def process_file_data(file_name, rows):
 
             if ("Galaxy Pay chuyen tien" in payment_info ):
 
-                merchant_name = extract_hdbank_merchant(
+                merchant_id = extract_hdbank_merchant(
                     payment_info
                 )
 
@@ -919,16 +919,13 @@ def process_file_data(file_name, rows):
                 if amount == 0:
                     continue
 
-                # Merchant ID mapping sẽ làm sau
-                merchant_id = merchant_name
-
                 add_group(
                     merchant_name=merchant_name,
                     merchant_id=merchant_id,
                     payment_type="TRANSFER",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=payment_info
+                    note_raw=f"Phát sinh nợ {payment_info}"
                 )
 
                 continue
@@ -972,12 +969,12 @@ def process_file_data(file_name, rows):
                 )
 
                 add_group(
-                    merchant_name="HDBANK",
+                    merchant_name=merchant_name,
                     merchant_id=merchant_id,
                     payment_type="FEE",
                     posting_date=posting_date,
                     amount=fee_amount,
-                    note_raw=merchant_info
+                    note_raw=f"Phát sinh nợ {merchant_info}"
                 )
 
                 # amount_n2_credit chưa tạo group
@@ -999,12 +996,12 @@ def process_file_data(file_name, rows):
                 )
 
                 add_group(
-                    merchant_name="HDBANK",
+                    merchant_name=merchant_name,
                     merchant_id=merchant_id,
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=payment_info
+                    note_raw=f"Phát sinh có {payment_info}"
                 )
 
                 continue
@@ -1016,12 +1013,12 @@ def process_file_data(file_name, rows):
                 )
 
                 add_group(
-                    merchant_name="MOMO",
-                    merchant_id="GPay",
+                    merchant_name=merchant_name,
+                    merchant_id="MOMO",
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=""
+                    note_raw="Phát sinh có"
                 )
 
                 continue
@@ -1034,12 +1031,12 @@ def process_file_data(file_name, rows):
                 )
 
                 add_group(
-                    merchant_name="NAPAS",
-                    merchant_id="GPay",
+                    merchant_name=merchant_name,
+                    merchant_id="NAPAS",
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=""
+                    note_raw="Phát sinh có"
                 )
 
                 continue
@@ -1052,12 +1049,12 @@ def process_file_data(file_name, rows):
                 )
 
                 add_group(
-                    merchant_name="ZALOPAY",
-                    merchant_id="GPay",
+                    merchant_name=merchant_name,
+                    merchant_id="ZALOPAY",
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=""
+                    note_raw="Phát sinh có"
                 )
 
                 continue
@@ -1070,12 +1067,12 @@ def process_file_data(file_name, rows):
                 )
 
                 add_group(
-                    merchant_name="HDBANK",
+                    merchant_name=merchant_name,
                     merchant_id="GPay",
                     payment_type="DEPOSITS_INTEREST",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=payment_info
+                    note_raw=f"Phát sinh có {payment_info}"
                 )
 
                 continue
@@ -1085,12 +1082,12 @@ def process_file_data(file_name, rows):
                 )
 
                 add_group(
-                    merchant_name="HDBANK",
+                    merchant_name=merchant_name,
                     merchant_id="VIETJET",
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=payment_info
+                    note_raw=f"Phát sinh có {payment_info}"
                 )
                 continue
             elif "So giao dich" in payment_info:
@@ -1099,8 +1096,8 @@ def process_file_data(file_name, rows):
                 )
 
                 add_group(
-                    merchant_name="HDBANK",
-                    merchant_id="QR",
+                    merchant_name=merchant_name,
+                    merchant_id="HDBANK",
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
@@ -1113,12 +1110,12 @@ def process_file_data(file_name, rows):
                 )
 
                 add_group(
-                    merchant_name="HDBANK",
-                    merchant_id=f"GD-QR",
+                    merchant_name=merchant_name,
+                    merchant_id="HDBANK",
                     payment_type="PAYMENT_INTERNAL",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw= payment_info
+                    note_raw= f"Phát sinh có {payment_info}"
                 )
 
                 
