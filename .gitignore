@@ -1,4 +1,10 @@
-.DS_Store
+
 /csv_recon_report/
 /DAILY_RECON/
-__pycache__/__pycache__/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# macOS
+.DS_Store

@@ -18,6 +18,8 @@ DEFAULT_PROFIT_CENTER = "10800001"
 BUSINESS_UNIT = {
         # Merchant (Partner)
         "VIETJET": "1010",
+        "UPC VIETJET AIR": "1010",
+        "UPC MPGS VIETJET AIR": "1010",
         "VIETJET KIOSK": "1010",
         "VIETJET SKYSHOP": "1010",
         "GALAXY PAY": "1080",
@@ -31,17 +33,24 @@ BUSINESS_UNIT = {
         "RỒNG VIỆT": "0037486431",
         "RONG VIET": "0037486431",
         "HDI": "1000000860",
+        "HDI PORTAL": "1000000860",
         "ONAIR": "1000002978",
         "VSSS": "1000002177",
         "VSSS VICTORIA INTERNATIONAL SCHOOL": "1000002177",
+        "VSSS (VICTORIA INTERNATIONAL SCHOOL)": "1000002177",
+        "VSSS VICTORIA SCHOOL": "1000002177",
         "TRUONG KHAI HOAN-NAM SG": "1000003029",
         "KHẢI HOÀN-NSG": "1000003029",
+        "TRUONG KHAI HOANNSG": "1000003029",
         "KHOAN-RIVERSIDE": "1000003028",
         "TRUONG KHAI HOAN-RIVERSIDE": "1000003028",
+        "TRUONG KHAI HOANRIVERSIDE": "1000003028",
         "SBH": "1000002630",
+        "UPC SBH": "1000002630",
         "VINAPP": "1000002977",
         "VINCLUB": "1000002977",
         "VIKKAFE": "1000003587",
+        "QR CODE VIKKAFE": "1000003587",
         "MENAS": "1000000265",
 
         # Đối tác
@@ -56,12 +65,15 @@ BUSINESS_UNIT = {
         "HDB": "0037360001",
         "HDB-VA": "0037360001",
         "HDBANK": "0037360001",
+        "HDBANK_STATEMENT": "0037360001",
         "BIDV": "0037360001",
         "MPGS": "0037360001",
         "GIAC MO BAY RE": "0037483314",
+        "GD GIAC MO BAY RE": "0037483314",
         "SML": "1000002847",
         "MAILAND": "1000003027",
         "BMGĐ": "1000000932",
+        "BMI - ABBANK": "1000000932",
         "BẢO MINH": "1000003702",
         "GOTRUST": "1000003386",
         "VNS": "1000002624",
@@ -651,7 +663,7 @@ def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, 
     merchant_bu = BUSINESS_UNIT.get(business, business)
     partner_acc = ACCOUNT_MAPPING.get(merchant_name, merchant_name)
     merchant_acc = ACCOUNT_MAPPING.get(business, business)
-    account = partner_acc if dr_cr == "Nợ" else merchant_acc
+    #account = partner_acc if dr_cr == "Nợ" else merchant_acc
     business_unit = partner_bu if dr_cr == "Nợ" else merchant_bu
     # ======================================================
     # BUSINESS UNIT
@@ -727,10 +739,10 @@ def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, 
                 account = "3388403100"
         
       
-    elif "Lãi tiền gửi" in title_upper:
+    elif "LÃI TIỀN GỬI" in title_upper:
         business_unit = ""
         if dr_cr == "Nợ":
-            if merchant_name == "HDBANK":
+            if merchant_name == "HDBANK_STATEMENT":
                 account = "1121121305"
             elif merchant_name == "BVB":
                 account = "1121122302"
@@ -1028,12 +1040,15 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
         "HDB": "0037360001",
         "BIDV": "0037360001",
     }
-
+    if dr_cr == "Nợ" and "HLệch" not in title:
+        account = "1388404200"
+    else:
+        account = "3388403100"
     partner_bu = BUSINESS_UNIT.get(merchant_name, merchant_name)
     merchant_bu = BUSINESS_UNIT.get(business, business)
     partner_acc = ACCOUNT_MAPPING.get(merchant_name, merchant_name)
     merchant_acc = ACCOUNT_MAPPING.get(business, business)
-    account = partner_acc if dr_cr == "Nợ" else merchant_acc
+    #account = partner_acc if dr_cr == "Nợ" else merchant_acc
     business_unit = partner_bu if dr_cr == "Nợ" else merchant_bu
     # ======================================================
     if payment_type == "PAYMENT" and recon_result == "MATCH_SUCCESS" and business == "GPAY" and "TEST" in title_upper:
@@ -1058,9 +1073,17 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
     elif payment_type == "REFUND" and recon_result == "MATCH_SUCCESS" and note == "MISS_REFUND_FALSE":
         account = "3388403200" if dr_cr == "Nợ" else "1388404200"
         business_unit = "0037360001" if dr_cr == "Nợ" else merchant_bu
-    
+    elif "LÃI TIỀN GỬI" in title_upper:
+        business_unit = ""
+        if dr_cr == "Nợ":
+            if merchant_name == "HDBANK_STATEMENT":
+                account = "1121121305"
+            elif merchant_name == "BVB":
+                account = "1121122302"
+        else:
+            account = "5151510100"
     else:
-        account = partner_acc if dr_cr == "Nợ" else merchant_acc
+        #account = partner_acc if dr_cr == "Nợ" else merchant_acc
         business_unit = partner_bu if dr_cr == "Nợ" else merchant_bu
 
     #HDBANK_STATMENT
@@ -1070,10 +1093,8 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
             business_unit = "" if dr_cr == "Nợ" else "0037360001"
         elif "Phát sinh nợ" in note:
             account = "3311401000" if dr_cr == "Nợ" else "1121121305"
-            business_unit = "0037360001" if dr_cr == "Nợ" else ""
-        else:
-            account = partner_acc if dr_cr == "Nợ" else merchant_acc
-            business_unit = partner_bu if dr_cr == "Nợ" else merchant_bu
+            business_unit = partner_bu if dr_cr == "Nợ" else ""
+
     
     return {
         # "document_type": document_type,
@@ -1638,6 +1659,9 @@ def build_title_hdbank(
         "32400035": "KH-RVS",
         "32400036": "KH-NSG",
         "32400629": "MENAS",
+        "32403748": "GOTRUST",
+        "32402744": "Giấc Mơ Bay Rẻ",
+        "GD Giac Mo Bay Re": "Giấc Mơ Bay Rẻ",
         "UPC Vietjet Air": "VIETJET",
         "Galaxy Telecom": "SKYFI",
         "Galaxy Joy": "-GJoy",
@@ -1659,6 +1683,7 @@ def build_title_hdbank(
         "UPC SBH": "SBH",
         "Napas": "Cổng",
         "NAPAS": "Cổng",
+        "QR Code Vikkafe": "Vikkafe"
     }
 
     business = merchant_mapping.get(merchant_id, merchant_id)
@@ -2076,6 +2101,11 @@ def main():
                     posting_info = build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result)
                 else:
                     posting_info = build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result)
+                if title == "Lãi tiền gửi" and dr_cr == "Có":
+                    dummy = "DUMMY"
+                else:
+                    dummy = ""
+                
                 if amount == 0:
                     print(f"[WARN] Amount is 0, skipping row: {row}")
                     continue
@@ -2137,9 +2167,9 @@ def main():
 
                         "Order (Nhập lessor cho tài khoản 335* hoặc nhập mã chương trình sự kiện cho TK CP)": "",
                         "Máy bay (Nhập cho TK Doanh thu)": "",
-                        "Chặng bay (Nhập cho TK Doanh thu)": "",
+                        "Chặng bay (Nhập cho TK Doanh thu)": dummy,
 
-                        "Điều khoản thanh toán": "",
+                        "Điều khoản thanh toán": dummy,
                         "Ngày tính nợ": "",
                         "Khóa thanh toán": "",
                         "Phương thức thanh toán": "",
