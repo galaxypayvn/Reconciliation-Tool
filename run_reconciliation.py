@@ -17,8 +17,10 @@ def run_step(name, func):
         print(f"✅ {name} completed")
     except Exception as e:
         print(f"❌ {name} failed")
-        print(e)
-        sys.exit(1)
+        print(f"Error: {e}")
+
+        input("\n⏸ Press Enter to close...")
+        raise
 
 
 def main():
