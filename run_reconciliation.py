@@ -19,7 +19,7 @@ def run_step(name, func):
         print(f"❌ {name} failed")
         print(f"Error: {e}")
 
-        input("\n⏸ Press Enter to close...")
+        input("\n⏸ Press Enter to close the Error...")
         
 
 
@@ -29,7 +29,7 @@ def main():
     run_step("STEP 3 - Generate upload_file.csv", export_main)
 
     print("\n🎉 All steps completed successfully.")
-
+    input("\n⏸ Press Enter to close the program...")
 
 if __name__ == "__main__":
     main()
