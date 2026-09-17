@@ -20,7 +20,7 @@ def run_step(name, func):
         print(f"Error: {e}")
 
         input("\n⏸ Press Enter to close...")
-        raise
+        
 
 
 def main():
