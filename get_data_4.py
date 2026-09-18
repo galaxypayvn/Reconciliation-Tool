@@ -6,10 +6,10 @@ import json
 import csv
 import re
 from collections import defaultdict
-from export_upload_file_1 import get_date_range_from_filename, parse_posting_date_from_filename
 from pathlib import Path
 import sys
 import os
+from export_upload_file_1 import get_date_range_from_filename, parse_posting_date_from_filename, extract_hdbank_merchant, extract_bvbank_merchant
 
 
 INPUT_FILE = "csv_recon_report/recon_export.json"
@@ -27,153 +27,6 @@ NOTE_KEY = "Ghi chú"
 POSTING_DATE_KEY = "Ngày giao dịch"
 IS_CHARGE_KEY = "IsChargeFee"
 
-def extract_hdbank_merchant(payment_info):
-    """
-    Extract merchant name from Galaxy Pay transfer descriptions.
-
-    Supported examples:
-        Galaxy Pay chuyen tien cac giao dich UPC Vietjet Air N15/06/2026 (GD ND)
-            -> UPC Vietjet Air
-
-        Galaxy Pay chuyen tien cac giao dich HDI N12/06 den N14/06/2026
-            -> HDI
-
-        Galaxy Pay chuyen tien cac GD HDI N01/06/2026
-            -> HDI
-
-        Galaxy Pay chuyen tien VSSS (Victoria International School) N12/06 den N14/06/2026
-            -> VSSS (Victoria International School)
-
-        Galaxy Pay chuyen tien cac giao dich Galaxy Telecom tu N05/06 den N07/06/2026
-            -> Galaxy Telecom
-    """
-
-    patterns = [
-        # ============================================================
-        # 1. Galaxy Pay chuyen tien cac giao dich <merchant>
-        #    Galaxy Pay chuyen tien cac GD <merchant>
-        #
-        # Examples:
-        #   Galaxy Pay chuyen tien cac giao dich HDI N12/06 den N14/06/2026
-        #   Galaxy Pay chuyen tien cac giao dich Galaxy Telecom N1516/06/2026
-        #   Galaxy Pay chuyen tien cac giao dich Galaxy Telecom tu N05/06 den N07/06/2026
-        # ============================================================
-        (
-            r"Galaxy\s+Pay\s+chuyen\s+tien\s+cac\s+"
-            r"(?:giao\s+dich|GD)"
-            r"\s+(.*?)\s+"
-            r"(?:tu\s+)?"
-            r"N\d{1,4}/\d{1,2}"
-            r"(?:\s+(?:den|va)\s+N\d{1,2}/\d{1,2})?"
-            r"(?:\s+(?:den|va)\s+N\d{1,2}/\d{1,2})?"
-            r"/\d{4}"
-        ),
-
-        # ============================================================
-        # 2. Galaxy Pay chuyen tien <merchant>
-        #
-        # Examples:
-        #   Galaxy Pay chuyen tien VSSS (Victoria International School)
-        #       N12/06 den N14/06/2026
-        #
-        #   Galaxy Pay chuyen tien Truong Khai HoanNSG N16/06/2026
-        #   Galaxy Pay chuyen tien Truong Khai HoanNSG N01/06/2026
-        # ============================================================
-        (
-            r"Galaxy\s+Pay\s+chuyen\s+tien\s+"
-            r"(.*?)\s+"
-            r"N\d{1,4}/\d{1,2}"
-            r"(?:\s+(?:den|va)\s+N\d{1,2}/\d{1,2})?"
-            r"(?:\s+(?:den|va)\s+N\d{1,2}/\d{1,2})?"
-            r"/\d{4}"
-        ),
-    ]
-
-    for pattern in patterns:
-        match = re.search(
-            pattern,
-            payment_info,
-            re.IGNORECASE
-        )
-
-        if match:
-            return match.group(1).strip()
-
-    return "CAN_NOT_EXTRACT_MERCHANT_ID"
-def extract_bvbank_merchant(payment_info):
-    """
-    Extract merchant name from Galaxy Pay transfer descriptions.
-
-    Supported examples:
-        Galaxy Pay chuyen tien cac GD QR Code VIETJET N31/05/2026
-            -> VIETJET
-
-        Galaxy Pay chuyen tien cac GD QR Code VIETJET N29-30/05/2026
-            -> VIETJET
-
-       Galaxy Pay chuyen tien VSSS Victoria International School N29-31/05/2026 GD QR va bu tru phi T04/2026
-            -> VSSS Victoria International School
-
-        Galaxy Pay chuyen tien cac giao dich ONAIR N11/06/2026 GD QR
-            -> ONAIR
-
-        Galaxy Pay chuyen tien cac  GD QR Code Galaxy Telecom N29-31/05/2026
-            -> Galaxy Telecom
-        
-        Galaxy Pay chuyen tien cac GD QR CODE Truong Khai Hoan-NAM SG N10/062026
-            -> Truong Khai Hoan-NAM SG
-
-    """
-
-    patterns = [
-        # Galaxy Pay chuyen tien cac giao dich <merchant> Ndd/mm/yyyy
-        # Example:
-        # Galaxy Pay chuyen tien cac giao dich ONAIR N11/06/2026
-        (
-            r"Galaxy\s+Pay\s+chuyen\s+tien\s+cac\s+"
-            r"giao\s+dich\s+"
-            r"(.*?)\s+"
-            r"N\d{1,2}(?:-\d{1,2})?"
-            r"/\d{1,2}/?\d{4}"
-        ),
-
-        # Galaxy Pay chuyen tien cac GD QR Code <merchant> Ndd/mm/yyyy
-        # Example:
-        # Galaxy Pay chuyen tien cac GD QR Code VIETJET N31/05/2026
-        #
-        # QR Code is optional
-        # so it also supports:
-        # Galaxy Pay chuyen tien cac GD Galaxy Telecom N29-31/05/2026
-        (
-            r"Galaxy\s+Pay\s+chuyen\s+tien\s+cac\s+"
-            r"GD(?:\s+QR\s+Code)?\s+"
-            r"(.*?)\s+"
-            r"N\d{1,2}(?:-\d{1,2})?"
-            r"/\d{1,2}/?\d{4}"
-        ),
-
-        # Galaxy Pay chuyen tien <merchant> Ndd/mm/yyyy
-        # Example:
-        # Galaxy Pay chuyen tien VSSS Victoria International School N29-31/05/2026
-        (
-            r"Galaxy\s+Pay\s+chuyen\s+tien\s+"
-            r"(.*?)\s+"
-            r"N\d{1,2}(?:-\d{1,2})?"
-            r"/\d{1,2}/?\d{4}"
-        ),
-    ]
-
-    for pattern in patterns:
-        match = re.search(
-            pattern,
-            payment_info,
-            re.IGNORECASE
-        )
-
-        if match:
-            return match.group(1).strip()
-
-    return "CAN_NOT_EXTRACT_MERCHANT_ID"
 
 def get_posting_date_from_range(cell_value, file_name):
     """
