@@ -6,7 +6,9 @@ import re
 import calendar
 from pathlib import Path
 from openpyxl import Workbook
-from openpyxl.styles import numbers
+from helper import (extract_bvbank_merchant, extract_hdbank_merchant, get_date_range_from_months_match,
+    get_posting_date_minus_1, convert_payment_info_to_output, normalize_year, csv_to_xlsx, 
+    parse_date_from_filename, parse_posting_date_from_filename, normalize_posting_date)
 # from trio import Path
 INPUT_FILE = "csv_recon_report/recon_summary.csv"
 OUTPUT_FILE = "csv_recon_report/upload_file.csv"
@@ -80,322 +82,12 @@ BUSINESS_UNIT = {
     }
 
 
-def get_date_range_from_months_match(posting_date, file_name):
-    """
-    Lấy khoảng ngày hạch toán từ filename dạng:
-        29.07-03.08
-        31.07-02.08
 
-    posting_date:
-        dd/mm/yyyy
 
-    Ví dụ:
 
-        file_name = "...29.07-03.08..."
-        posting_date = "29/07/2026"
-        -> "29-31/07/2026"
 
-        posting_date = "01/08/2026"
-        -> "01-03/08/2026"
 
-        file_name = "...31.07-02.08..."
-        posting_date = "31/07/2026"
-        -> "31/07/2026"
-
-        posting_date = "01/08/2026"
-        -> "01-02/08/2026"
-    """
-
-    if not posting_date or not file_name:
-        return posting_date
-
-    # ==========================================
-    # Lấy range từ filename
-    # Ví dụ: 29.07-03.08
-    # ==========================================
-    pattern = r"\((\d{1,2})\.(\d{1,2})-(\d{1,2})\.(\d{1,2})\)"
-    match = re.search(pattern, file_name)
-
-    if not match:
-        return posting_date
-
-    start_day = int(match.group(1))
-    start_month = int(match.group(2))
-    end_day = int(match.group(3))
-    end_month = int(match.group(4))
-
-    # ==========================================
-    # Parse posting_date
-    # ==========================================
-    try:
-        posting_dt = datetime.strptime(
-            posting_date.strip(),
-            "%d/%m/%Y"
-        )
-    except ValueError:
-        return posting_date
-
-    year = posting_dt.year
-    current_month = posting_dt.month
-
-    # ==========================================
-    # THÁNG START
-    # ==========================================
-    if current_month == start_month:
-
-        last_day = calendar.monthrange(
-            year,
-            start_month
-        )[1]
-
-        # Ví dụ:
-        # 29.07-03.08
-        # -> 29-31/07/2026
-        if start_day != last_day:
-            return f"{start_day:02d}-{last_day:02d}/{start_month:02d}/{year}"
-
-        # Ví dụ:
-        # 31.07-02.08
-        # -> 31/07/2026
-        return f"{start_day:02d}/{start_month:02d}/{year}"
-
-    # ==========================================
-    # THÁNG END
-    # ==========================================
-    if current_month == end_month:
-
-        # Nếu start_month == end_month thì không phải
-        # trường hợp chuyển tháng
-        if start_month == end_month:
-            return posting_date
-
-        # Ví dụ:
-        # 29.07-03.08
-        # -> 01-03/08/2026
-        if end_day != 1:
-            return f"01-{end_day:02d}/{end_month:02d}/{year}"
-
-        # Ví dụ range kết thúc ngay ngày 01
-        # -> 01/08/2026
-        return f"{end_day:02d}/{end_month:02d}/{year}"
-
-    # Không thuộc range
-    return posting_date
-
-
-
-
-def csv_to_xlsx(input_file, output_file=None):
-    input_file = Path(input_file)
-
-    if not input_file.exists():
-        print(f"[ERROR] File not found: {input_file}")
-        return
-
-    if output_file is None:
-        output_file = input_file.with_suffix(".xlsx")
-    else:
-        output_file = Path(output_file)
-
-    workbook = Workbook()
-    worksheet = workbook.active
-    worksheet.title = "Sheet1"
-
-    # Các column được xem là ngày
-    DATE_COLUMNS = {
-        "Ngày giao dịch",
-        "Ngày hạch toán",
-        "Ngày giao dịch gốc",
-        "Ngày chứng từ",
-    }
-
-    # Các column được xem là số tiền
-    AMOUNT_COLUMNS = {
-        "Số tiền",
-        "Số dư",
-        "Debit",
-        "Credit",
-        "Balance",
-        "Số tiền (Bank)",
-        "Số tiền (Payment)",
-    }
-
-    # ============================================================
-    # Đọc CSV
-    # ============================================================
-
-    with open(
-        input_file,
-        "r",
-        encoding="utf-8-sig",
-        newline=""
-    ) as f:
-
-        reader = csv.reader(f)
-
-        # --------------------------------------------------------
-        # Đọc header
-        # --------------------------------------------------------
-
-        try:
-            headers = next(reader)
-        except StopIteration:
-            print(f"[ERROR] CSV file is empty: {input_file}")
-            return
-
-        # Ghi header
-        for col_index, header in enumerate(headers, start=1):
-
-            cell = worksheet.cell(
-                row=1,
-                column=col_index
-            )
-
-            cell.value = header
-            cell.number_format = "@"
-
-        # --------------------------------------------------------
-        # Đọc data
-        # --------------------------------------------------------
-
-        for row_index, row in enumerate(reader, start=2):
-
-            for col_index, value in enumerate(row, start=1):
-
-                header = headers[col_index - 1].strip()
-
-                cell = worksheet.cell(
-                    row=row_index,
-                    column=col_index
-                )
-
-                value = value.strip()
-
-                # ====================================================
-                # COLUMN DATE
-                # ====================================================
-
-                if header in DATE_COLUMNS:
-
-                    try:
-
-                        # Hỗ trợ:
-                        # 31/05/2026
-                        # 31/05/2026 00:00:00
-                        # 2026-05-31
-
-                        date_value = None
-
-                        for date_format in (
-                            "%d/%m/%Y",
-                            "%d/%m/%Y %H:%M:%S",
-                            "%Y-%m-%d",
-                            "%Y-%m-%d %H:%M:%S",
-                        ):
-
-                            try:
-                                date_value = datetime.strptime(
-                                    value,
-                                    date_format
-                                )
-                                break
-
-                            except ValueError:
-                                continue
-
-                        if date_value:
-
-                            cell.value = date_value
-                            cell.number_format = "dd/mm/yyyy"
-
-                        else:
-                            cell.value = value
-                            cell.number_format = "@"
-
-                    except Exception:
-                        cell.value = value
-                        cell.number_format = "@"
-
-                # ====================================================
-                # COLUMN AMOUNT
-                # ====================================================
-
-                elif header in AMOUNT_COLUMNS:
-
-                    try:
-
-                        # Remove thousand separator
-                        numeric_value = value.replace(",", "")
-
-                        if numeric_value == "":
-                            cell.value = None
-
-                        else:
-                            cell.value = float(numeric_value)
-
-                        cell.number_format = "#,##0.00"
-
-                    except (ValueError, TypeError):
-
-                        # Nếu không convert được thì giữ nguyên text
-                        cell.value = value
-                        cell.number_format = "@"
-
-                # ====================================================
-                # OTHER COLUMN
-                # ====================================================
-
-                else:
-
-                    cell.value = value
-                    cell.number_format = "@"
-
-    # ============================================================
-    # Auto width
-    # ============================================================
-
-    for column in worksheet.columns:
-
-        max_length = 0
-        column_letter = column[0].column_letter
-
-        for cell in column:
-
-            if cell.value is not None:
-
-                cell_length = len(str(cell.value))
-
-                if cell_length > max_length:
-                    max_length = cell_length
-
-        worksheet.column_dimensions[column_letter].width = min(
-            max_length + 2,
-            50
-        )
-
-    # ============================================================
-    # Save
-    # ============================================================
-
-    workbook.save(output_file)
-
-    print("[INFO] Converted:")
-    print(f"       CSV : {input_file}")
-    print(f"       XLSX: {output_file}")
     
-def normalize_posting_date(posting_date):
-    posting_date = posting_date.strip()
-
-    for date_format in ("%Y-%m-%d", "%d/%m/%Y"):
-        try:
-            return datetime.strptime(
-                posting_date,
-                date_format
-            ).strftime("%d/%m/%Y")
-        except ValueError:
-            continue
-
-    return posting_date
 
 def mapping_merchant(merchant, merchant_id):
     merchant_name_map = {
@@ -494,26 +186,6 @@ def get_date_range_from_filename(file_name: str) -> str:
 
     return f"{start_day:02d}-{end_day:02d}/{base_date.month:02d}/{base_date.year}"
 
-def parse_posting_date_from_filename(file_name):
-    date_match = re.search(r"(\d{8})", file_name)
-    day_match = re.search(r"\((?:\d{1,2}-)?(\d{1,2})\)", file_name)
-
-    if not date_match or not day_match:
-        return ""
-
-    try:
-        file_date = datetime.strptime(date_match.group(1), "%Y%m%d")
-
-        posting_date = datetime(
-            year=file_date.year,
-            month=file_date.month,
-            day=int(day_match.group(1))
-        )
-
-        return posting_date.strftime("%d/%m/%Y")
-
-    except ValueError:
-        return ""
 
 def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result):
 
@@ -898,13 +570,20 @@ def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, 
                 account = "1388404200"
             else:
                 account = "3388403200" 
-        elif "Hoàn" not in title:
+                
+        
+        elif "Hoàn" not in title or "HDB-HLệch" in title:
 
             if dr_cr == "Nợ":
-                account = "3388401000"
+                account = "3388403200"
             else:
-                account = "3388402000"
+                account = "1388404200"
+        elif "LỆCH" in title_upper:
 
+            if dr_cr == "Nợ":
+                account = "1388404200"
+            else:
+                account = "3388403200"
     # ======================================================
     # VNPAY
     # ======================================================
@@ -1059,7 +738,7 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
         business_unit = "0037360001" if dr_cr == "Nợ" else merchant_bu
     elif payment_type == "REFUND" and recon_result == "MATCH_SUCCESS" and note != "MISS_REFUND_FALSE":
         account = "3388403100" if dr_cr == "Nợ" else "1388404200"
-        business_unit = "0037360001" if dr_cr == "Nợ" else merchant_bu
+        business_unit = merchant_bu if dr_cr == "Nợ" else "0037360001"
     elif payment_type == "PAYMENT" and recon_result == "MISS_PARTNER":
         #không ghi nhận hạch toán
         account = "NONE"
@@ -1072,7 +751,7 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
             account = "1388404200" if dr_cr == "Nợ" else "3388403200"
     elif payment_type == "REFUND" and recon_result == "MATCH_SUCCESS" and note == "MISS_REFUND_FALSE":
         account = "3388403200" if dr_cr == "Nợ" else "1388404200"
-        business_unit = "0037360001" if dr_cr == "Nợ" else merchant_bu
+        business_unit = merchant_bu if dr_cr == "Nợ" else "0037360001"
     elif "LÃI TIỀN GỬI" in title_upper:
         business_unit = ""
         if dr_cr == "Nợ":
@@ -1090,7 +769,13 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
     if merchant == "HDBANK_STATMENT":
         if "Phát sinh có" in note:
             account = "1121121305" if dr_cr == "Nợ" else "1388404200"
-            business_unit = "" if dr_cr == "Nợ" else "0037360001"
+            business_unit = "" if dr_cr == "Nợ" else merchant_bu
+        elif "MPGS Phí" in title:
+            account = "3311401000" if dr_cr == "Nợ" else "1121121305"
+            business_unit = partner_bu if dr_cr == "Nợ" else ""
+        elif "Chuyển tiền" in title or "Ch.tien" in title:
+            account = "3388403100" if dr_cr == "Nợ" else "1121121305"
+            business_unit = merchant_bu if dr_cr == "Nợ" else ""
         elif "Phát sinh nợ" in note:
             account = "3311401000" if dr_cr == "Nợ" else "1121121305"
             business_unit = partner_bu if dr_cr == "Nợ" else ""
@@ -1101,18 +786,6 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
         "account": account,
         "business_unit": business_unit
     }
-
-def parse_date_from_filename(file_name: str):
-    match = re.search(r"\d{8}", file_name)
-    if not match:
-        return ""
-
-    try:
-        dt = datetime.strptime(match.group(), "%Y%m%d")
-        dt = dt - timedelta(days=1)
-        return dt.strftime("%d/%m/%Y")
-    except:
-        return ""
 
 def build_title_wallet(
         merchant,
@@ -1484,7 +1157,7 @@ def build_title_upc(
         "SKYFI": "SKYFI",
         "SKY JOY": "GJoy",
         "SKYJOY": "GJoy",
-
+        "BMI - ABBANK": "BMGĐ",
         "BAO HIEM HD": "HDI",
         "BAO HIEM HD - PORTAL": "HDI",
         "CÔNG TY TNHH BẢO HIỂM HD": "HDI",
@@ -1529,7 +1202,7 @@ def build_title_upc(
     channel_mapping = {
         "MOMO": "UPC",
         "NAPAS": "UPC",
-        "HDB_MPGS": "",
+        "HDB_MPGS": "UPC",
         "GPAY": "TT",
 
         "VCCB": "QR",
@@ -1722,7 +1395,7 @@ def build_title_hdbank(
     # PAYMENT_RECEIVED
     # ============================================
     if payment_type == "PAYMENT_RECEIVED":
-        if merchant_id == "QR":
+        if merchant_id == "HDBANK":
             return f"HDB-Báo có GD QR"
         return f"{merchant_name}-{channel_text}{business}"
             
@@ -1828,8 +1501,9 @@ def build_title_bvb(
     return f"{merchant_name}-{payment_type} {merchant_id} {recon_result} {note}"
 
 
-def build_description(title, posting_date, accounting_date, merchant_id, merchant_name, file_name, note):
+def build_description(title, posting_date, accounting_date, merchant_id, merchant_name, file_name, note, payment_type):
     
+    #posting_date
     try:
         posting_date = datetime.strptime(posting_date, "%Y-%m-%d").strftime("%d/%m/%Y")
     except ValueError:
@@ -1846,6 +1520,15 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
     month_match = re.search(pattern_months, file_name)
     if month_match:
         posting_date = get_date_range_from_months_match(posting_date, file_name)
+    
+    posting_date_1 = get_posting_date_minus_1(posting_date)
+    
+    #description
+    
+    if "MPGS-GD UPC" in title:
+        title = title.replace("UPC ", "")
+    if "BMGĐ" in title:
+        title = title.replace("BMGĐ", "BAO MINH GIA DINH")
     
     if merchant_id == "VJ WEB SKYSHOP":
         title = f"{title}-SKYSHOP"
@@ -1865,7 +1548,7 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
         title = title.replace("HLệch ", "Hoàn Lệch ")
         #print(title + "+"*60)
         
-        
+    
     if "(ĐT)" in title:
         rtitle = title.split(" (ĐT)")[0] if " (ĐT)" in title else title.split("(ĐT)")[0]
         rtitle = f"{rtitle} N{posting_date} (ĐT)"
@@ -1899,8 +1582,44 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
             rtitle = f"{title.replace("HDI", "HDI-Portal")} N{posting_date}"
         else:
             rtitle = f"{title} N{posting_date}"
+    
+    
+    #=============HDBANK_STATEMENT=============
+    if "HDB-Báo có GD QR" in title:
+        rtitle = f"{title} N{posting_date}" 
+    elif "BC GD" in title and payment_type == "PAYMENT_RECEIVED":
+        rtitle = f"{title} N{posting_date_1}"
+    elif "MPGS Phí" in title:
+        rtitle = title
+    elif "Chuyển tiền" in title or "Ch.tien" in title:
+        if "HDB" in merchant_name:
+            merchant = extract_hdbank_merchant(note.upper())
+
+        elif "BVB" in merchant_name:
+            merchant = extract_bvbank_merchant(note.upper())
+
+        else:
+            merchant = None
 
 
+        if merchant:
+            note_upper = note.upper()
+
+            merchant_pos = note_upper.find(merchant.upper())
+
+            if merchant_pos != -1:
+                # Chỉ lấy phần phía sau merchant
+                rtitle= convert_payment_info_to_output(note)
+               #rtitle = f"{title} {date_map}"
+
+
+            else:
+                rtitle = "ERROR_DATE_EXTRACT"
+
+        else:
+            rtitle = "ERROR_DATE_EXTRACT"
+        
+        
     if "IBFT" in title and "BVB" in title:
         mapping = mapping_merchant(merchant_name, merchant_id)
         merchant_id_map = mapping["business_map"]
@@ -1942,6 +1661,7 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
             rtitle = title
     # if posting_date != accounting_date:
     #     return f"{title} N{accounting_date}"
+    
     
     return rtitle
 
@@ -2076,7 +1796,7 @@ def main():
                 accounting_date = parse_posting_date_from_filename(file_name)
             
             # ===== DIỄN GIẢI (FIXED) =====
-            description = build_description(title, posting_date, accounting_date, merchant_id, merchant, file_name, note)
+            description = build_description(title, posting_date, accounting_date, merchant_id, merchant, file_name, note, payment_type)
             if "MPGS" in merchant.upper() or merchant == "HDBANK_STATEMENT":
                 debit_info = build_posting_info_mpgs(title, "Nợ", merchant, merchant_id, note, payment_type, recon_result)
                 credit_info = build_posting_info_mpgs(title, "Có", merchant, merchant_id, note, payment_type, recon_result)
