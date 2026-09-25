@@ -771,7 +771,7 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
         business_unit = partner_bu if dr_cr == "Nợ" else merchant_bu
 
     #HDBANK_STATMENT
-    if merchant == "HDBANK_STATEMENT" or "HDBANK" in file_name:
+    if merchant == "HDBANK_STATEMENT" or "HDBANK" in file_name or "SAOKE_BVBANK" in file_name.upper():
         if "Phát sinh có" in note:
             account = "1121121305" if dr_cr == "Nợ" else "1388404200"
             if "NAPAS-BC" in title:
@@ -1830,7 +1830,7 @@ def main():
             
             # ===== DIỄN GIẢI (FIXED) =====
             description = build_description(title, posting_date, accounting_date, merchant_id, merchant, file_name, note, payment_type)
-            if "MPGS" in merchant.upper() or merchant == "HDBANK_STATEMENT" or "HDBANK" in file_name.upper() :
+            if "MPGS" in merchant.upper() or merchant == "HDBANK_STATEMENT" or "HDBANK" in file_name.upper() or "SAOKE_BVBANK" in file_name.upper():
                 debit_info = build_posting_info_mpgs(title, "Nợ", merchant, merchant_id, note, payment_type, recon_result, file_name, amount)
                 credit_info = build_posting_info_mpgs(title, "Có", merchant, merchant_id, note, payment_type, recon_result, file_name, amount)
             else:
@@ -1850,7 +1850,7 @@ def main():
             # =======================================================
 
             for dr_cr in ["Nợ", "Có"]:
-                if "MPGS" in merchant.upper() or merchant == "HDBANK_STATEMENT":
+                if "MPGS" in merchant.upper() or merchant == "HDBANK_STATEMENT" or "HDBANK" in file_name.upper() or "SAOKE_BVBANK" in file_name.upper():
                     posting_info = build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result, file_name, amount)
                 else:
                     posting_info = build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result)

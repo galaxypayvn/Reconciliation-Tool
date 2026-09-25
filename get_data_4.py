@@ -1444,7 +1444,7 @@ def process_file_data(file_name, rows):
                         payment_type=payment_type,
                         posting_date=posting_date,
                         amount=debit_amount,
-                        note_raw=payment_info
+                        note_raw=f"Phát sinh nợ {payment_info}"
                     )
                         add_group(
                         merchant_name=merchant_name,
@@ -1452,7 +1452,7 @@ def process_file_data(file_name, rows):
                         payment_type="FEE",
                         posting_date=posting_date,
                         amount=next_item["debit_amount"],
-                        note_raw=next_info
+                        note_raw=f"Phát sinh nợ {payment_info}"
                     )
 
                 
@@ -1471,11 +1471,11 @@ def process_file_data(file_name, rows):
                     payment_type="REFUND",
                     posting_date=posting_date,
                     amount=debit_amount,
-                    note_raw="GALAXY PAY YEU CAU HOAN TRA"
+                    note_raw="Phát sinh nợ GALAXY PAY YEU CAU HOAN TRA"
                 )
 
                 continue
-
+        
         # ============================================================
         # 2. PHÁT SINH CÓ
         # ============================================================
@@ -1512,7 +1512,7 @@ def process_file_data(file_name, rows):
                 payment_type="PAYMENT_INTEREST",
                 posting_date=interest_posting_date,
                 amount=total_interest,
-                note_raw="TRA LAI TIEN GUI"
+                note_raw="Phát sinh có TRA LAI TIEN GUI"
             )
 
         # ============================================================
@@ -1751,7 +1751,7 @@ def process_file_data(file_name, rows):
                 payment_type="PAYMENT",
                 posting_date=date_obj.strftime("%d/%m/%Y"),
                 amount=amount,
-                note_raw="BVBANK PAYMENT"
+                note_raw="Phát sinh có BVBANK PAYMENT"
             )
     #     # ============================================================
     #     # 2.4 HẠCH TOÁN
