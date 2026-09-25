@@ -10,7 +10,7 @@ from pathlib import Path
 import sys
 import os
 from export_upload_file_1 import get_date_range_from_filename, parse_posting_date_from_filename, extract_hdbank_merchant, extract_bvbank_merchant
-
+from helper import normalize_posting_date
 
 INPUT_FILE = "csv_recon_report/recon_export.json"
 SUMMARY_JSON_FILE = "csv_recon_report/recon_summary.json"
@@ -217,7 +217,8 @@ def process_file_data(file_name, rows):
     # ======================================================
 
     if is_recon_input:
-
+        mpgs_daily = defaultdict(int)
+        mpgs_daily_info = {}
         for row in rows:
 
             posting_date, days_match = get_posting_date(row)
@@ -284,7 +285,7 @@ def process_file_data(file_name, rows):
             # ==================================================
             # MPGS
             # ==================================================
-
+            is_mpgs_weekend_candidate = False
             if (
                 "MPGS" in merchant_name.upper()
                 and origin_date
@@ -300,6 +301,65 @@ def process_file_data(file_name, rows):
                         file_name
                     )
 
+                # --------------------------------------------------
+                # Normalize posting_date về dd/mm/YYYY
+                # --------------------------------------------------
+
+                posting_date = normalize_posting_date(
+                    posting_date
+                )
+
+                # --------------------------------------------------
+                # Kiểm tra ngày hợp lệ
+                # --------------------------------------------------
+
+                try:
+                    posting_dt = datetime.strptime(
+                        posting_date,
+                        "%d/%m/%Y"
+                    ).date()
+
+                except ValueError:
+                    # Nếu ngày MPGS không hợp lệ thì
+                    # không đưa vào weekend grouping.
+                    # Tiếp tục xử lý group bình thường.
+                    posting_dt = None
+
+                if posting_dt is not None:
+
+                    # --------------------------------------------------
+                    # Lưu amount theo ngày
+                    # --------------------------------------------------
+
+                    mpgs_daily[posting_dt] += amount
+
+                    # Lưu thông tin group của ngày
+                    #
+                    # Nếu cùng ngày có nhiều row thì giữ thông tin
+                    # của row đầu tiên.
+                    #
+                    if posting_dt not in mpgs_daily_info:
+                        mpgs_daily_info[posting_dt] = {
+                            "merchant_name": merchant_name,
+                            "merchant_id": merchant_id,
+                            "payment_type": payment_type,
+                            "recon_result": recon_result,
+                            "currency": currency,
+                            "note_raw": note_raw,
+                        }
+
+                    is_mpgs_weekend_candidate = True
+
+            # ==================================================
+            # Nếu là MPGS MATCH_SUCCESS PAYMENT
+            # thì KHÔNG GROUP ngay tại đây.
+            #
+            # Sẽ group sau khi đã scan hết rows.
+            # ==================================================
+
+            if is_mpgs_weekend_candidate:
+                continue
+                
             # ==================================================
             # MISS GPAY
             # ==================================================
@@ -383,6 +443,300 @@ def process_file_data(file_name, rows):
             ):
                 if note_group == "MISS_REFUND":
                     info["note_raw"] = "MISS_REFUND_FALSE"
+            # ==========================================================
+            # MPGS WEEKEND GROUPING
+            # ==========================================================
+            #
+            # Quy tắc:
+            #
+            # 1. Fri + Sat + Sun cùng tháng
+            #
+            #       Fri
+            #       Sat
+            #       Sun
+            #
+            #   -> 1 dòng
+            #   -> posting_date = Sunday
+            #
+            #
+            # 2. Fri + Sat + Sun qua tháng
+            #
+            #       31/07 Fri
+            #       01/08 Sat
+            #       02/08 Sun
+            #
+            #   -> 2 dòng:
+            #
+            #      31/07 + 01/08 -> 01/08
+            #      02/08         -> 02/08
+            #
+            # ==========================================================
+
+            processed_mpgs_dates = set()
+
+            sorted_mpgs_dates = sorted(
+                mpgs_daily.keys()
+            )
+
+            for friday in sorted_mpgs_dates:
+
+                # --------------------------------------------------
+                # Chỉ bắt đầu từ Thứ 6
+                #
+                # Python:
+                # Monday    = 0
+                # Tuesday   = 1
+                # Wednesday = 2
+                # Thursday  = 3
+                # Friday    = 4
+                # Saturday  = 5
+                # Sunday    = 6
+                # --------------------------------------------------
+
+                if friday.weekday() != 4:
+                    continue
+
+                saturday = friday + timedelta(days=1)
+                sunday = friday + timedelta(days=2)
+
+                # --------------------------------------------------
+                # Phải có đủ Fri + Sat + Sun
+                # --------------------------------------------------
+
+                if saturday not in mpgs_daily:
+                    continue
+
+                if sunday not in mpgs_daily:
+                    continue
+
+                friday_amount = mpgs_daily[friday]
+                saturday_amount = mpgs_daily[saturday]
+                sunday_amount = mpgs_daily[sunday]
+
+                friday_info = mpgs_daily_info[friday]
+                saturday_info = mpgs_daily_info[saturday]
+                sunday_info = mpgs_daily_info[sunday]
+
+                # ==================================================
+                # CASE 1
+                #
+                # FRI + SAT + SUN CÙNG THÁNG
+                #
+                # Ví dụ:
+                #
+                # 05/06/2026 Fri
+                # 06/06/2026 Sat
+                # 07/06/2026 Sun
+                #
+                # -> 05 + 06 + 07
+                # -> posting_date = 07/06/2026
+                # ==================================================
+
+                if (
+                    friday.year == saturday.year == sunday.year
+                    and friday.month == saturday.month == sunday.month
+                ):
+
+                    weekend_amount = (
+                        friday_amount
+                        + saturday_amount
+                        + sunday_amount
+                    )
+
+                    if weekend_amount != 0:
+
+                        group_key = (
+                            friday_info["merchant_name"],
+                            friday_info["merchant_id"],
+                            friday_info["payment_type"],
+                            friday_info["recon_result"],
+                            sunday.strftime("%d/%m/%Y"),
+                            ""
+                        )
+
+                        info = grouped_data[group_key]
+
+                        info["total_amount"] += weekend_amount
+                        info["txn_count"] += 3
+
+                        info["currencies"].add(
+                            friday_info["currency"]
+                        )
+
+                        info["currencies"].add(
+                            saturday_info["currency"]
+                        )
+
+                        info["currencies"].add(
+                            sunday_info["currency"]
+                        )
+
+                        if not info["note_raw"]:
+                            info["note_raw"] = (
+                                friday_info["note_raw"]
+                            )
+
+                        info[POSTING_DATE_KEY] = (
+                            sunday.strftime("%d/%m/%Y")
+                        )
+
+                    processed_mpgs_dates.update([
+                        friday,
+                        saturday,
+                        sunday
+                    ])
+
+                    continue
+
+                # ==================================================
+                # CASE 2
+                #
+                # FRI + SAT + SUN QUA THÁNG
+                #
+                # Ví dụ:
+                #
+                # 31/07/2026 Fri
+                # 01/08/2026 Sat
+                # 02/08/2026 Sun
+                #
+                # -> Fri + Sat = 1 dòng
+                # -> Sun       = 1 dòng
+                # ==================================================
+
+                if (
+                    friday.month != saturday.month
+                    or saturday.month != sunday.month
+                ):
+
+                    # --------------------------------------------------
+                    # Fri + Sat
+                    # --------------------------------------------------
+
+                    previous_amount = (
+                        friday_amount
+                        + saturday_amount
+                    )
+
+                    if previous_amount != 0:
+
+                        group_key = (
+                            friday_info["merchant_name"],
+                            friday_info["merchant_id"],
+                            friday_info["payment_type"],
+                            friday_info["recon_result"],
+                            saturday.strftime("%d/%m/%Y"),
+                            ""
+                        )
+
+                        info = grouped_data[group_key]
+
+                        info["total_amount"] += previous_amount
+                        info["txn_count"] += 2
+
+                        info["currencies"].add(
+                            friday_info["currency"]
+                        )
+
+                        info["currencies"].add(
+                            saturday_info["currency"]
+                        )
+
+                        if not info["note_raw"]:
+                            info["note_raw"] = (
+                                friday_info["note_raw"]
+                            )
+
+                        info[POSTING_DATE_KEY] = (
+                            saturday.strftime("%d/%m/%Y")
+                        )
+
+                    # --------------------------------------------------
+                    # Sunday riêng
+                    # --------------------------------------------------
+
+                    if sunday_amount != 0:
+
+                        group_key = (
+                            sunday_info["merchant_name"],
+                            sunday_info["merchant_id"],
+                            sunday_info["payment_type"],
+                            sunday_info["recon_result"],
+                            sunday.strftime("%d/%m/%Y"),
+                            ""
+                        )
+
+                        info = grouped_data[group_key]
+
+                        info["total_amount"] += sunday_amount
+                        info["txn_count"] += 1
+
+                        info["currencies"].add(
+                            sunday_info["currency"]
+                        )
+
+                        if not info["note_raw"]:
+                            info["note_raw"] = (
+                                sunday_info["note_raw"]
+                            )
+
+                        info[POSTING_DATE_KEY] = (
+                            sunday.strftime("%d/%m/%Y")
+                        )
+
+                    processed_mpgs_dates.update([
+                        friday,
+                        saturday,
+                        sunday
+                    ])
+
+
+            # ==========================================================
+            # MPGS CÁC NGÀY CÒN LẠI
+            #
+            # Không nằm trong bộ Fri-Sat-Sun
+            # -> mỗi ngày 1 group
+            # ==========================================================
+
+            for date_obj in sorted(mpgs_daily.keys()):
+
+                if date_obj in processed_mpgs_dates:
+                    continue
+
+                amount = mpgs_daily[date_obj]
+
+                if amount == 0:
+                    continue
+
+                mpgs_info = mpgs_daily_info[date_obj]
+
+                posting_date = date_obj.strftime(
+                    "%d/%m/%Y"
+                )
+
+                group_key = (
+                    mpgs_info["merchant_name"],
+                    mpgs_info["merchant_id"],
+                    mpgs_info["payment_type"],
+                    mpgs_info["recon_result"],
+                    posting_date,
+                    ""
+                )
+
+                info = grouped_data[group_key]
+
+                info["total_amount"] += amount
+                info["txn_count"] += 1
+
+                info["currencies"].add(
+                    mpgs_info["currency"]
+                )
+
+                if not info["note_raw"]:
+                    info["note_raw"] = (
+                        mpgs_info["note_raw"]
+                    )
+
+                info[POSTING_DATE_KEY] = posting_date
 
     # ======================================================
     # DS_Daily
@@ -838,7 +1192,7 @@ def process_file_data(file_name, rows):
             # ========================================================
             # C. CÁC BÁO CÓ
             # ========================================================
-            elif "Noi dung: BAO CO TID" in payment_info:
+            elif "Loai giao dich: Merchant payment for on-u-1001" in payment_info:
 
                 amount = parse_amount(
                     row.get("Phát sinh có", 0)
@@ -866,7 +1220,7 @@ def process_file_data(file_name, rows):
                 )
 
                 add_group(
-                    merchant_name=merchant_name,
+                    merchant_name="MOMO",
                     merchant_id="MOMO",
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
@@ -884,7 +1238,7 @@ def process_file_data(file_name, rows):
                 )
 
                 add_group(
-                    merchant_name=merchant_name,
+                    merchant_name="NAPAS",
                     merchant_id="NAPAS",
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
@@ -902,7 +1256,7 @@ def process_file_data(file_name, rows):
                 )
 
                 add_group(
-                    merchant_name=merchant_name,
+                    merchant_name="ZALOPAY",
                     merchant_id="ZALOPAY",
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
@@ -1090,7 +1444,7 @@ def process_file_data(file_name, rows):
                         payment_type=payment_type,
                         posting_date=posting_date,
                         amount=debit_amount,
-                        note_raw=payment_info
+                        note_raw=f"Phát sinh nợ {payment_info}"
                     )
                         add_group(
                         merchant_name=merchant_name,
@@ -1098,7 +1452,7 @@ def process_file_data(file_name, rows):
                         payment_type="FEE",
                         posting_date=posting_date,
                         amount=next_item["debit_amount"],
-                        note_raw=next_info
+                        note_raw=f"Phát sinh nợ {payment_info}"
                     )
 
                 
@@ -1117,11 +1471,11 @@ def process_file_data(file_name, rows):
                     payment_type="REFUND",
                     posting_date=posting_date,
                     amount=debit_amount,
-                    note_raw="GALAXY PAY YEU CAU HOAN TRA"
+                    note_raw="Phát sinh nợ GALAXY PAY YEU CAU HOAN TRA"
                 )
 
                 continue
-
+        
         # ============================================================
         # 2. PHÁT SINH CÓ
         # ============================================================
@@ -1158,7 +1512,7 @@ def process_file_data(file_name, rows):
                 payment_type="PAYMENT_INTEREST",
                 posting_date=interest_posting_date,
                 amount=total_interest,
-                note_raw="TRA LAI TIEN GUI"
+                note_raw="Phát sinh có TRA LAI TIEN GUI"
             )
 
         # ============================================================
@@ -1366,7 +1720,7 @@ def process_file_data(file_name, rows):
                 payment_type="PAYMENT",
                 posting_date=sunday.strftime("%d/%m/%Y"),
                 amount=weekend_amount,
-                note_raw="BVBANK WEEKEND"
+                note_raw="Phát sinh có BVBANK WEEKEND"
             )
 
             # Đánh dấu đã xử lý
@@ -1397,7 +1751,7 @@ def process_file_data(file_name, rows):
                 payment_type="PAYMENT",
                 posting_date=date_obj.strftime("%d/%m/%Y"),
                 amount=amount,
-                note_raw="BVBANK PAYMENT"
+                note_raw="Phát sinh có BVBANK PAYMENT"
             )
     #     # ============================================================
     #     # 2.4 HẠCH TOÁN
