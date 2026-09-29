@@ -24,6 +24,7 @@ AMOUNT_KEY = "Số tiền"
 ORIGIN_PAYMENT_DATE_KEY = "Ngày giao dịch gốc"
 RECON_RESULT_KEY = "Kết quả đối soát"
 NOTE_KEY = "Ghi chú"
+REFER_NUM_KEY = "Số tham chiếu"
 POSTING_DATE_KEY = "Ngày giao dịch"
 IS_CHARGE_KEY = "IsChargeFee"
 
@@ -134,14 +135,15 @@ def export_summary_to_json(data, output_file=SUMMARY_JSON_FILE):
 def process_file_data(file_name, rows):
 
     print("Processing:", file_name)
-
+    refer_num = ""
     grouped_data = defaultdict(lambda: {
         "total_amount": 0,
         "txn_count": 0,
         "currencies": set(),
         "note_raw": "",
         "origin_date": "",
-        POSTING_DATE_KEY: ""
+        POSTING_DATE_KEY: "",
+        REFER_NUM_KEY: "",
     })
 
     is_recon_input = "RECON_REPORT_INPUT" in file_name
@@ -186,21 +188,23 @@ def process_file_data(file_name, rows):
             payment_type,
             posting_date,
             amount,
-            note_raw
+            note_raw,
+            refer_num=""
         ):
             if not posting_date or amount == 0:
                 return
 
             recon_result = "MATCH_SUCCESS"
             note_group = note_raw
-
+            
             group_key = (
                 merchant_name,
                 merchant_id,
                 payment_type,
                 recon_result,
                 posting_date,
-                note_group
+                note_group,
+                refer_num
             )
 
             info = grouped_data[group_key]
@@ -209,6 +213,7 @@ def process_file_data(file_name, rows):
             info["txn_count"] += 1
             info["currencies"].add(currency)
             info[POSTING_DATE_KEY] = posting_date
+            info[REFER_NUM_KEY] = refer_num
 
             if not info["note_raw"]:
                 info["note_raw"] = note_raw
@@ -254,7 +259,12 @@ def process_file_data(file_name, rows):
             is_charge = row.get(
                 IS_CHARGE_KEY, ""
             )
-
+            refer_num = str(
+                row.get(
+                    REFER_NUM_KEY,
+                    ""
+                ) or ""
+            ).strip()
             # ==================================================
             # GOM MERCHANT VIETJET
             # ==================================================
@@ -416,7 +426,8 @@ def process_file_data(file_name, rows):
                 payment_type,
                 recon_result,
                 posting_date,
-                note_group
+                note_group,
+                refer_num
             )
 
             info = grouped_data[group_key]
@@ -432,7 +443,7 @@ def process_file_data(file_name, rows):
                 info["origin_date"] = origin_date
 
             info[POSTING_DATE_KEY] = posting_date
-
+            info[REFER_NUM_KEY] = refer_num
             # ==================================================
             # REFUND NOTE
             # ==================================================
@@ -551,6 +562,7 @@ def process_file_data(file_name, rows):
                             friday_info["payment_type"],
                             friday_info["recon_result"],
                             sunday.strftime("%d/%m/%Y"),
+                            "",
                             ""
                         )
 
@@ -579,6 +591,7 @@ def process_file_data(file_name, rows):
                         info[POSTING_DATE_KEY] = (
                             sunday.strftime("%d/%m/%Y")
                         )
+                        info[REFER_NUM_KEY] = refer_num
 
                     processed_mpgs_dates.update([
                         friday,
@@ -625,6 +638,7 @@ def process_file_data(file_name, rows):
                             friday_info["payment_type"],
                             friday_info["recon_result"],
                             saturday.strftime("%d/%m/%Y"),
+                            "",
                             ""
                         )
 
@@ -649,7 +663,7 @@ def process_file_data(file_name, rows):
                         info[POSTING_DATE_KEY] = (
                             saturday.strftime("%d/%m/%Y")
                         )
-
+                        info[REFER_NUM_KEY] = refer_num
                     # --------------------------------------------------
                     # Sunday riêng
                     # --------------------------------------------------
@@ -662,6 +676,7 @@ def process_file_data(file_name, rows):
                             sunday_info["payment_type"],
                             sunday_info["recon_result"],
                             sunday.strftime("%d/%m/%Y"),
+                            "",
                             ""
                         )
 
@@ -682,6 +697,7 @@ def process_file_data(file_name, rows):
                         info[POSTING_DATE_KEY] = (
                             sunday.strftime("%d/%m/%Y")
                         )
+                        info[REFER_NUM_KEY] = refer_num
 
                     processed_mpgs_dates.update([
                         friday,
@@ -719,7 +735,8 @@ def process_file_data(file_name, rows):
                     mpgs_info["payment_type"],
                     mpgs_info["recon_result"],
                     posting_date,
-                    ""
+                    "",
+                    refer_num
                 )
 
                 info = grouped_data[group_key]
@@ -737,6 +754,7 @@ def process_file_data(file_name, rows):
                     )
 
                 info[POSTING_DATE_KEY] = posting_date
+                info[REFER_NUM_KEY] = refer_num
 
     # ======================================================
     # DS_Daily
@@ -787,7 +805,12 @@ def process_file_data(file_name, rows):
                 "Kết quả đối soát\n(Bank)",
                 ""
             ).strip()
-
+            refer_num = str(
+                row.get(
+                    REFER_NUM_KEY,
+                    ""
+                ) or ""
+            ).strip()
             # ==================================================
             # PAYMENT TYPE
             # ==================================================
@@ -906,14 +929,20 @@ def process_file_data(file_name, rows):
             # ==================================================
             # GROUP BANK
             # ==================================================
-
+            refer_num = str(
+                row.get(
+                    REFER_NUM_KEY,
+                    ""
+                ) or ""
+            ).strip()
             group_key = (
                 merchant_name,
                 merchant_id,
                 payment_type,
                 recon_result,
                 posting_date,
-                note_group
+                note_group,
+                refer_num
             )
 
             info = grouped_data[group_key]
@@ -928,6 +957,8 @@ def process_file_data(file_name, rows):
 
             if not info["origin_date"]:
                 info["origin_date"] = origin_date
+                
+            info[REFER_NUM_KEY] = refer_num
 
         # ==================================================
         # 2. PAYMENT SIDE
@@ -936,7 +967,12 @@ def process_file_data(file_name, rows):
         print("[INFO] Processing PAYMENT side")
 
         for row in rows:
-
+            refer_num = str(
+                row.get(
+                    REFER_NUM_KEY,
+                    ""
+                ) or ""
+            ).strip()
             payment_partner = row.get(
                 "Đối tác (Payment)",
                 ""
@@ -1057,7 +1093,8 @@ def process_file_data(file_name, rows):
                 payment_type,
                 recon_result,
                 posting_date,
-                note_group
+                note_group,
+                refer_num
             )
 
             info = grouped_data[group_key]
@@ -1072,6 +1109,7 @@ def process_file_data(file_name, rows):
 
             if not info["origin_date"]:
                 info["origin_date"] = origin_date
+            info[REFER_NUM_KEY] = refer_num
     
     # ======================================================
     # HDBANK_INPUT
@@ -1088,15 +1126,29 @@ def process_file_data(file_name, rows):
                     re.IGNORECASE
                 )
 
-                return match.group(1) if match else "UNKNOWN"
-    
+                return match.group(1) if match else payment_info
+        # ========================================================
+        # SORT HDBANK ROWS
+        #
+        # Thứ tự:
+        #   1. Số tham chiếu tăng dần
+        #   2. Trong cùng Số tham chiếu:
+        #      - Phát sinh có trước
+        #      - Phát sinh nợ sau
+        # ========================================================
+
         for index, row in enumerate(rows):
 
             posting_date = row.get(
                 POSTING_DATE_KEY,
                 ""
             ).strip()
-
+            refer_num = str(
+                row.get(
+                    REFER_NUM_KEY,
+                    ""
+                )
+            ).strip()
             if not posting_date:
                 print(
                     "[WARN] HDBANK: "
@@ -1108,6 +1160,9 @@ def process_file_data(file_name, rows):
                 "Thông tin giao dịch",
                 ""
             ).strip()
+            
+            
+            
             
             # ========================================================
             # A. GALAXY PAY TRANSFER
@@ -1132,7 +1187,9 @@ def process_file_data(file_name, rows):
                     payment_type="TRANSFER",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=f"Phát sinh nợ {payment_info}"
+                    note_raw=f"Phát sinh nợ {refer_num} {payment_info}",
+                    refer_num = refer_num
+                    
                 )
 
                 continue
@@ -1166,13 +1223,13 @@ def process_file_data(file_name, rows):
 
                 fee_amount = amount_n + amount_n1
 
-                merchant_info = row_n2.get(
+                merchant_info_n2 = row_n2.get(
                     "Thông tin giao dịch",
                     ""
                 ).strip()
 
                 merchant_id = extract_merchant_id(
-                    merchant_info
+                    merchant_info_n2
                 )
 
                 add_group(
@@ -1181,7 +1238,8 @@ def process_file_data(file_name, rows):
                     payment_type="FEE",
                     posting_date=posting_date,
                     amount=fee_amount,
-                    note_raw=f"Phát sinh nợ {merchant_info}"
+                    note_raw=f"Phát sinh nợ {refer_num} {merchant_info_n2}",
+                    refer_num = refer_num
                 )
 
                 # amount_n2_credit chưa tạo group
@@ -1208,7 +1266,8 @@ def process_file_data(file_name, rows):
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=f"Phát sinh có {payment_info}"
+                    note_raw=f"Phát sinh có {payment_info}",
+                    refer_num = refer_num
                 )
 
                 continue
@@ -1225,7 +1284,8 @@ def process_file_data(file_name, rows):
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw="Phát sinh có"
+                    note_raw= f"Phát sinh có {refer_num}",
+                    refer_num = refer_num
                 )
 
                 continue
@@ -1243,7 +1303,8 @@ def process_file_data(file_name, rows):
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw="Phát sinh có"
+                    note_raw= f"Phát sinh có {refer_num}",
+                    refer_num = refer_num
                 )
 
                 continue
@@ -1261,7 +1322,8 @@ def process_file_data(file_name, rows):
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw="Phát sinh có"
+                    note_raw= f"Phát sinh có {refer_num}",
+                    refer_num = refer_num
                 )
 
                 continue
@@ -1279,7 +1341,8 @@ def process_file_data(file_name, rows):
                     payment_type="DEPOSITS_INTEREST",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=f"Phát sinh có {payment_info}"
+                    note_raw= f"Phát sinh có {refer_num} {payment_info}",
+                    refer_num = refer_num
                 )
 
                 continue
@@ -1294,7 +1357,8 @@ def process_file_data(file_name, rows):
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=f"Phát sinh có {payment_info}"
+                    note_raw=f"Phát sinh có {refer_num} {payment_info}",
+                    refer_num = refer_num
                 )
                 continue
             elif "So giao dich" in payment_info:
@@ -1308,7 +1372,8 @@ def process_file_data(file_name, rows):
                     payment_type="PAYMENT_RECEIVED",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw=f"Phát sinh có GD-QR {posting_date}"
+                    note_raw=f"Phát sinh có GD-QR {posting_date}",
+                    refer_num = ""
                 )
                 continue
             else:
@@ -1322,7 +1387,8 @@ def process_file_data(file_name, rows):
                     payment_type="PAYMENT_INTERNAL",
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw= f"Phát sinh có {payment_info}"
+                    note_raw= f"Phát sinh có {refer_num} {posting_date}  {payment_info}",
+                    refer_num = refer_num
                 )
 
                 
@@ -1336,7 +1402,12 @@ def process_file_data(file_name, rows):
         processed_rows = []
 
         for index, row in enumerate(rows):
-
+            refer_num = str(
+                row.get(
+                    REFER_NUM_KEY,
+                    ""
+                ) or ""
+            ).strip()
             posting_date = row.get(
                 "NGÀY GIAO DỊCH\n(Transaction Date)",
                 ""
@@ -1444,7 +1515,8 @@ def process_file_data(file_name, rows):
                         payment_type=payment_type,
                         posting_date=posting_date,
                         amount=debit_amount,
-                        note_raw=f"Phát sinh nợ {payment_info}"
+                        note_raw=f"Phát sinh nợ {payment_info}",
+                        refer_num = refer_num
                     )
                         add_group(
                         merchant_name=merchant_name,
@@ -1452,7 +1524,8 @@ def process_file_data(file_name, rows):
                         payment_type="FEE",
                         posting_date=posting_date,
                         amount=next_item["debit_amount"],
-                        note_raw=f"Phát sinh nợ {payment_info}"
+                        note_raw=f"Phát sinh nợ {payment_info}",
+                        refer_num = refer_num
                     )
 
                 
@@ -1471,7 +1544,8 @@ def process_file_data(file_name, rows):
                     payment_type="REFUND",
                     posting_date=posting_date,
                     amount=debit_amount,
-                    note_raw="Phát sinh nợ GALAXY PAY YEU CAU HOAN TRA"
+                    note_raw="Phát sinh nợ GALAXY PAY YEU CAU HOAN TRA",
+                    refer_num = refer_num
                 )
 
                 continue
@@ -1512,7 +1586,8 @@ def process_file_data(file_name, rows):
                 payment_type="PAYMENT_INTEREST",
                 posting_date=interest_posting_date,
                 amount=total_interest,
-                note_raw="Phát sinh có TRA LAI TIEN GUI"
+                note_raw="Phát sinh có TRA LAI TIEN GUI",
+                refer_num = refer_num
             )
 
         # ============================================================
@@ -1720,7 +1795,8 @@ def process_file_data(file_name, rows):
                 payment_type="PAYMENT",
                 posting_date=sunday.strftime("%d/%m/%Y"),
                 amount=weekend_amount,
-                note_raw="Phát sinh có BVBANK WEEKEND"
+                note_raw="Phát sinh có BVBANK WEEKEND",
+                refer_num = refer_num
             )
 
             # Đánh dấu đã xử lý
@@ -1751,7 +1827,8 @@ def process_file_data(file_name, rows):
                 payment_type="PAYMENT",
                 posting_date=date_obj.strftime("%d/%m/%Y"),
                 amount=amount,
-                note_raw="Phát sinh có BVBANK PAYMENT"
+                note_raw="Phát sinh có BVBANK PAYMENT",
+                refer_num = refer_num
             )
     #     # ============================================================
     #     # 2.4 HẠCH TOÁN
@@ -1833,7 +1910,8 @@ def process_file_data(file_name, rows):
         payment_type,
         recon_result,
         posting_date,
-        note_group
+        note_group,
+        refer_num
     ), info in grouped_data.items():
 
         nested_summary.setdefault(
@@ -1897,7 +1975,8 @@ def process_file_data(file_name, rows):
             POSTING_DATE_KEY: posting_date,
             CURRENCY_KEY: list(info["currencies"]),
             ORIGIN_PAYMENT_DATE_KEY: info["origin_date"],
-            NOTE_KEY: info["note_raw"]
+            NOTE_KEY: info["note_raw"],
+            REFER_NUM_KEY: info[REFER_NUM_KEY]
         })
 
     return nested_summary
@@ -1928,7 +2007,11 @@ def export_to_csv(json_file, output_csv):
                                         "Số lượng giao dịch": info["txn_count"],
                                         CURRENCY_KEY: ",".join(info.get(CURRENCY_KEY, [])),
                                         ORIGIN_PAYMENT_DATE_KEY: info.get(ORIGIN_PAYMENT_DATE_KEY, ""),
-                                        NOTE_KEY: info.get(NOTE_KEY, "")
+                                        NOTE_KEY: info.get(NOTE_KEY, ""),
+                                        REFER_NUM_KEY: info.get(
+                                            REFER_NUM_KEY,
+                                            ""
+                                        )
                                     })
 
     fieldnames = [
@@ -1942,9 +2025,79 @@ def export_to_csv(json_file, output_csv):
         "Số lượng giao dịch",
         CURRENCY_KEY,
         ORIGIN_PAYMENT_DATE_KEY,
-        NOTE_KEY
+        NOTE_KEY,
+        REFER_NUM_KEY
     ]
+    
+    def parse_csv_date(value):
+        try:
+            return datetime.strptime(
+                str(value).strip(),
+                "%d/%m/%Y"
+            )
+        except (ValueError, TypeError):
+            return datetime.max
 
+
+    def get_flow_order(row):
+        note = str(
+            row.get(NOTE_KEY, "") or ""
+        ).strip().lower()
+
+        if note.startswith("phát sinh có"):
+            return 0
+
+        if note.startswith("phát sinh nợ"):
+            return 1
+
+        return 2
+
+
+    def get_reference_sort_key(row):
+        reference = str(
+            row.get(REFER_NUM_KEY, "") or ""
+        ).strip()
+
+        if reference.isdigit():
+            return int(reference)
+
+        return float("inf")
+    print("\n========== BEFORE SORT ==========")
+
+    for row in rows:
+            print(
+                row.get("Ngày chứng từ"),
+                "|",
+                row.get("Ghi chú"),
+                "|",
+                repr(row.get("Số tham chiếu"))
+            )
+
+    print("================================\n")
+
+    rows.sort(
+        key=lambda row: (
+            row.get("File", ""),
+            parse_csv_date(
+                row.get(POSTING_DATE_KEY, "")
+            ),
+            get_flow_order(row),
+            get_reference_sort_key(row),
+        )
+    )
+    print("\n========== AFTER SORT ==========")
+
+    for row in rows:
+            print(
+                row.get("Ngày chứng từ"),
+                "|",
+                row.get("Ghi chú"),
+                "|",
+                repr(row.get("Số tham chiếu"))
+            )
+
+    print("================================\n")
+    
     with open(output_csv, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()

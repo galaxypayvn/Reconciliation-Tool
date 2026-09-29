@@ -104,10 +104,13 @@ def mapping_merchant(merchant, merchant_id):
         "IMEDIA JSC_TOPUP": "Imedia",
         "IMediaBill": "Imedia",
         "IMediaTopup": "Imedia",
-        "SKY JOY": "GPay",
-        "SKY FI": "GPay",
-        "SKYFI": "GPay",
-        "VIETJET AIR": "GPay",
+        "SKY JOY": "GJoy",
+        "Galaxy Joy": "GJoy",
+        "SKY FI": "SKYFI",
+        "SKYFI": "SKYFI",
+        "Galaxy Telecom": "SKYFI",
+        "VIETJET AIR": "VIETJET",
+        "VIETJET Air": "VIETJET",
         "VNPAY": "VNPay"
   
     }
@@ -132,6 +135,7 @@ def mapping_merchant(merchant, merchant_id):
         "VJ PAYMENT LINK": "VIETJET",
         "VIETJET AIR": "VIETJET",
         "SKYFI": "SKYFI",
+        "Galaxy Telecom": "SKYFI",
         "SKY JOY": "GJoy",
         "ONAIR": "OnAir",
         "VJ WEB SKYSHOP": "SKYSHOP",
@@ -187,7 +191,7 @@ def get_date_range_from_filename(file_name: str) -> str:
     return f"{start_day:02d}-{end_day:02d}/{base_date.month:02d}/{base_date.year}"
 
 
-def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result):
+def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result, file_name):
 
     title_upper = title.upper()
     merchant = merchant.strip().upper()
@@ -388,11 +392,11 @@ def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, 
 
     
     
-    
+    account_hd_bvb = "1121121305" if "HDBANK" in file_name else "1121122302"
     if "BC GD" in title_upper or "BÁO CÓ GD" in title_upper:
      
         if dr_cr == "Nợ":
-            account = "1121122302" if merchant_name == "BVB" else "1121121305"
+            account = account_hd_bvb
             business_unit = ""
         else:
             account = "1388404200"
@@ -414,10 +418,7 @@ def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, 
     elif "LÃI TIỀN GỬI" in title_upper:
         business_unit = ""
         if dr_cr == "Nợ":
-            if merchant_name == "HDBANK_STATEMENT":
-                account = "1121121305"
-            elif merchant_name == "BVB":
-                account = "1121122302"
+            account = account_hd_bvb
         else:
             account = "5151510100"
     # ======================================================
@@ -693,7 +694,8 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
     ).upper()
 
     business = merchant_mapping.get(merchant_id, merchant_id).upper()
-
+    
+    account_hd_bvb = "1121121305" if "HDBANK" in file_name else "1121122302"
     # ======================================================
     # BUSINESS UNIT MAPPING
     # ======================================================
@@ -724,6 +726,7 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
         "HDB": "0037360001",
         "BIDV": "0037360001",
     }
+    
     if dr_cr == "Nợ" and "HLệch" not in title:
         account = "1388404200"
     else:
@@ -760,35 +763,32 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
     elif "LÃI TIỀN GỬI" in title_upper:
         business_unit = ""
         if dr_cr == "Nợ":
-            if merchant_name == "HDBANK_STATEMENT":
-                account = "1121121305"
-            elif merchant_name == "BVB":
-                account = "1121122302"
+            account = account_hd_bvb
         else:
             account = "5151510100"
     else:
         #account = partner_acc if dr_cr == "Nợ" else merchant_acc
         business_unit = partner_bu if dr_cr == "Nợ" else merchant_bu
-
+    
     #HDBANK_STATMENT
     if merchant == "HDBANK_STATEMENT" or "HDBANK" in file_name or "SAOKE_BVBANK" in file_name.upper():
         if "Phát sinh có" in note:
-            account = "1121121305" if dr_cr == "Nợ" else "1388404200"
+            account = account_hd_bvb if dr_cr == "Nợ" else "1388404200"
             if "NAPAS-BC" in title:
                 account = "1388404300"
             business_unit = "" if dr_cr == "Nợ" else partner_bu
         elif "Phí" in title:
-            account = "3311401000" if dr_cr == "Nợ" else "1121121305"
+            account = "3311401000" if dr_cr == "Nợ" else account_hd_bvb
             business_unit = partner_bu if dr_cr == "Nợ" else ""
             if "BVB-Phí" in title and amount < 200000:
-                account = "6321510200" if dr_cr == "Nợ" else "1121121305"
+                account = "6321510200" if dr_cr == "Nợ" else account_hd_bvb
                 if (dr_cr == "Nợ" and "669" in file_name):
                     business_unit = "1000002626" 
         elif "Chuyển tiền" in title or "Ch.tien" in title:
-            account = "3388403100" if dr_cr == "Nợ" else "1121121305"
+            account = "3388403100" if dr_cr == "Nợ" else account_hd_bvb
             business_unit = merchant_bu if dr_cr == "Nợ" else ""
         elif "Phát sinh nợ" in note:
-            account = "3311401000" if dr_cr == "Nợ" else "1121121305"
+            account = "3311401000" if dr_cr == "Nợ" else account_hd_bvb
             
             business_unit = partner_bu if dr_cr == "Nợ" else ""
         
@@ -1358,6 +1358,7 @@ def build_title_hdbank(
         "32402744": "Giấc Mơ Bay Rẻ",
         "GD Giac Mo Bay Re": "Giấc Mơ Bay Rẻ",
         "UPC Vietjet Air": "VIETJET",
+        "VIETJET Air": "VIETJET",
         "Galaxy Telecom": "SKYFI",
         "Galaxy Joy": "-GJoy",
         "UPC MPGS Vietjet Air": "VIETJET",
@@ -1436,7 +1437,7 @@ def build_title_hdbank(
         if business == " KH-RVS":
             return f"Ch.tien UPC-KH Riverside"
         
-        return f"Chuyển tiền {channel_text}{business}"
+        return f"Chuyển tiền {channel_text}{business}".replace("GD UPC", "UPC")
     elif payment_type == "DEPOSITS_INTEREST":
         return f"Lãi tiền gửi"
     elif payment_type == "PAYMENT_INTERNAL":
@@ -1478,7 +1479,7 @@ def build_title_bvb(
         "GPay": "QR",
         "ONAIR": "OnAir",
         "VIETJET": "Vietjet",
-        "Truong Khai Hoan-NAM SG": "-NSG",
+        "Truong Khai Hoan-NAM SG": "Khải Hoàn-NSG",
         "Truong Khai HoanRIVERSIDE": "KH-RVS",
         "Truong Khai Hoan-RIVERSIDE": "KH-RVS",
         "VSSS": "VSSS",
@@ -1631,7 +1632,7 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
         else:
             merchant = None
 
-
+        merchant = mapping_merchant(merchant, merchant_id)["merchant_map"]
         if merchant:
             note_upper = note.upper()
 
@@ -1692,6 +1693,8 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
     # if posting_date != accounting_date:
     #     return f"{title} N{accounting_date}"
     
+    if "Lãi tiền gửi" in title:
+        rtitle = title
     
     return rtitle
 
@@ -1718,6 +1721,19 @@ def build_document_type(
     debit = debit_info["account"]
     credit = credit_info["account"]
     SA = ["112", "511", "711", "811", "642", "632"] 
+    
+    if "Phát sinh có" in note:
+        document_type = "DZ"
+    elif "Phát sinh nợ" in note:
+        document_type = "KZ"
+    else:
+        document_type = "CL"
+    # ===========================
+    # Default
+    # ===========================
+    if "DV IBFT Hoàn" in title and note == "MISS_REFUND_FALSE":
+        document_type = "CL"
+        
     #print(debit[0:2], credit[0:2])
     # ===========================
     # Rule 1
@@ -1736,25 +1752,16 @@ def build_document_type(
     elif debit.startswith("131") and credit.startswith("511"):
         document_type = "RV"
 
-    elif debit[0:2] in SA and credit[0:2] in SA:
+    elif debit.startswith("6") or credit.startswith("6"):
         document_type = "SA"
-    else:
-        document_type = "CL"
+   
     # ===========================
     # Rule 3
     # ===========================
 
     # if "HOÀN" in title.upper():
     #     document_type = "KA"
-    if "Phát sinh có" in note:
-        document_type = "DZ"
-    elif "Phát sinh nợ" in note:
-        document_type = "KZ"
-    # ===========================
-    # Default
-    # ===========================
-    if "DV IBFT Hoàn" in title and note == "MISS_REFUND_FALSE":
-        document_type = "CL"
+    
     return document_type
 
 def main():
@@ -1834,8 +1841,8 @@ def main():
                 debit_info = build_posting_info_mpgs(title, "Nợ", merchant, merchant_id, note, payment_type, recon_result, file_name, amount)
                 credit_info = build_posting_info_mpgs(title, "Có", merchant, merchant_id, note, payment_type, recon_result, file_name, amount)
             else:
-                debit_info = build_posting_info(title, "Nợ", merchant, merchant_id, note, payment_type, recon_result)
-                credit_info = build_posting_info(title, "Có", merchant, merchant_id, note, payment_type, recon_result)
+                debit_info = build_posting_info(title, "Nợ", merchant, merchant_id, note, payment_type, recon_result, file_name)
+                credit_info = build_posting_info(title, "Có", merchant, merchant_id, note, payment_type, recon_result, file_name)
 
             document_type = build_document_type(
                 title,
@@ -1853,14 +1860,21 @@ def main():
                 if "MPGS" in merchant.upper() or merchant == "HDBANK_STATEMENT" or "HDBANK" in file_name.upper() or "SAOKE_BVBANK" in file_name.upper():
                     posting_info = build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result, file_name, amount)
                 else:
-                    posting_info = build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result)
+                    posting_info = build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result, file_name)
+                
                 if title == "Lãi tiền gửi" and dr_cr == "Có":
                     dummy = "DUMMY"
                 else:
                     dummy = ""
                 
-                if amount == 0:
-                    print(f"[WARN] Amount is 0, skipping row: {row}")
+                if posting_info["account"].startswith("63") or posting_info["account"].startswith("644"):
+                    cost_center = "8001601000"
+                else:
+                    cost_center = ""
+                
+                
+                if amount == 0 or payment_type == "PAYMENT_INTERNAL" or "BVB-Cắt tiền" in title:
+                    print(f"[WARN] Amount is 0 or PAYMENT_INTERNAL, skipping row: {row}")
                     continue
                 else:
                     rows_out.append({
@@ -1905,7 +1919,7 @@ def main():
                         "Chi cục thuế (Không cần điền)": "",
                         "Chi nhánh (Không cần điền)": "",
 
-                        "TT Chi phí (Cost center)": "",
+                        "TT Chi phí (Cost center)": cost_center,
                         "TT lợi nhuận (Profit center)": DEFAULT_PROFIT_CENTER,
 
                         "Payment cur.": "",
@@ -1949,12 +1963,6 @@ def main():
                         "Trading.Partner ( Phục vụ hợp nhất BCTC)": ""
                     })
                     
-
-        rows_out.sort(
-            key=lambda row: (
-                datetime.strptime(row["Ngày chứng từ"], "%d/%m/%Y")
-                )
-        )
         
         for i in range(0, len(rows_out), 2):
             stt = i // 2 + 1
