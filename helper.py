@@ -34,17 +34,25 @@ def extract_hdbank_merchant(payment_info):
         #
         # Examples:
         #   Galaxy Pay chuyen tien cac giao dich HDI N12/06 den N14/06/2026
-        #   Galaxy Pay chuyen tien cac giao dich Galaxy Telecom N1516/06/2026
+        #   Galaxy Pay chuyen tien cac giao dich Galaxy Telecom N15/06/2026
         #   Galaxy Pay chuyen tien cac giao dich Galaxy Telecom tu N05/06 den N07/06/2026
+        #   Galaxy Pay chuyen tien cac giao dich UPC MPGS Vietjet Air
+        #       tu N07/08 den 09/08/2026 (GD QT)
         # ============================================================
         (
             r"Galaxy\s+Pay\s+chuyen\s+tien\s+cac\s+"
             r"(?:giao\s+dich|GD)"
             r"\s+(.*?)\s+"
-            r"(?:tu\s+)?"
-            r"N\d{1,4}/\d{1,2}"
-            r"(?:\s+(?:den|va)\s+N\d{1,2}/\d{1,2})?"
-            r"(?:\s+(?:den|va)\s+N\d{1,2}/\d{1,2})?"
+            r"(?:"
+                # tu N07/08 den 09/08/2026
+                r"tu\s+N\d{1,4}/\d{1,2}"
+                r"\s+den\s+N?\d{1,2}/\d{1,2}"
+                r"|"
+                # N07/08 den N09/08/2026
+                r"N\d{1,4}/\d{1,2}"
+                r"(?:\s+(?:den|va)\s+N?\d{1,2}/\d{1,2})?"
+                r"(?:\s+(?:den|va)\s+N?\d{1,2}/\d{1,2})?"
+            r")"
             r"/\d{4}"
         ),
 
@@ -56,7 +64,6 @@ def extract_hdbank_merchant(payment_info):
         #       N12/06 den N14/06/2026
         #
         #   Galaxy Pay chuyen tien Truong Khai HoanNSG N16/06/2026
-        #   Galaxy Pay chuyen tien Truong Khai HoanNSG N01/06/2026
         # ============================================================
         (
             r"Galaxy\s+Pay\s+chuyen\s+tien\s+"
@@ -424,7 +431,7 @@ def convert_payment_info_to_output(payment_info: str) -> str:
         # GJoy
         (
             r"Galaxy Joy",
-            "Galaxy Joy"
+            "GJoy"
         ),
 
         # HDI
@@ -447,9 +454,14 @@ def convert_payment_info_to_output(payment_info: str) -> str:
 
         # VIETJET
         (
+            r"VIETJET Air",
+            "VIETJET"
+        ),
+        (
             r"VIETJET",
             "VIETJET"
         ),
+        
 
         # VSSS
         (
@@ -483,13 +495,13 @@ def convert_payment_info_to_output(payment_info: str) -> str:
         # Galaxy Telecom
         (
             r"Galaxy Telecom",
-            "Galaxy Telecom"
+            "Skyfi"
         ),
 
         # NSG
         (
             r"NSG",
-            "NSG"
+            "Khải Hoàn-NSG"
         ),
 
         # RồngViệt
