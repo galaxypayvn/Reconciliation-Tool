@@ -54,6 +54,8 @@ jobs:
         run: |
           python -m PyInstaller `
             --onefile `
+            --noupx `
+            --clean `
             --name ReconciliationTool `
             "$env:GITHUB_WORKSPACE\run_reconciliation.py"
 
