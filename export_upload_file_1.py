@@ -6,6 +6,7 @@ import re
 import calendar
 from pathlib import Path
 from openpyxl import Workbook
+from convert_data_to_json import FILE_PREFIX, WALLET_FILE_PREFIX, WALLET_NEW_FILE_PREFIX, WALLET_NEW_FILE_PREFIX_INPUT, WALLET_NEW_FILE_PREFIX_OUTPUT
 from helper import (extract_bvbank_merchant, extract_hdbank_merchant, get_date_range_from_months_match,
     get_posting_date_minus_1, convert_payment_info_to_output, normalize_year, csv_to_xlsx, 
     parse_date_from_filename, parse_posting_date_from_filename, normalize_posting_date)
@@ -747,6 +748,9 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
     elif payment_type == "REFUND" and recon_result == "MATCH_SUCCESS" and note != "MISS_REFUND_FALSE":
         account = "3388403100" if dr_cr == "Nợ" else "1388404200"
         business_unit = merchant_bu if dr_cr == "Nợ" else "0037360001"
+        if "TEST" in title_upper:
+            account = "3388403300" if dr_cr == "Nợ" else "1388404200"
+            business_unit = "1080" if dr_cr == "Nợ" else "0037360001"
     elif payment_type == "PAYMENT" and recon_result == "MISS_PARTNER":
         #không ghi nhận hạch toán
         account = "NONE"
@@ -826,6 +830,7 @@ def build_title_wallet(
         "IMEDIA": "Imedia",
         "BIDV": "BIDV",
         "HDBANK": "HDB",
+        "HDB": "HDB",
         "HDB-VA": "HDB",
         "CÔNG TY TNHH BẢO HIỂM HD": "GPay",
         "IMEDIA JSC_TOPUP": "Imedia",
@@ -875,6 +880,8 @@ def build_title_wallet(
 
         "VINCLUB": "VinApp",
         "MENAS STORE": "Menas",
+        "HDBANK": "",
+        "BIDV": "",
         
     }
 
@@ -922,10 +929,13 @@ def build_title_wallet(
 
         elif payment_type in [
             "CASHIN",
-            "PAYMENT-CASHIN"
+            "PAYMENT-CASHIN",
+            "PAYMENT"
         ]:
 
             if recon_result == "MATCH_SUCCESS":
+                if business == "":
+                    return f"{bank}-GD QR"
                 return f"{bank}-GD QR {business}"
 
             elif recon_result == "MISS_GPAY" or recon_result == "GPAY_MORE":
@@ -1824,9 +1834,9 @@ def main():
             # posting_date_ymd = posting_date.replace("/", "")
 
             # ===== TITLE =====
-            if "RECON" in file_name.upper():
+            if "RECON_REPORT_INPUT" in file_name.upper():
                 title = build_title_upc(merchant,payment_type,merchant_id,recon_result,note)
-            elif "DAILY" in file_name.upper():
+            elif "DAILY" in file_name.upper() or WALLET_NEW_FILE_PREFIX in file_name.upper():
                 title = build_title_wallet(merchant,payment_type,merchant_id,recon_result,note)
             elif "HDBANK" in file_name.upper():
                 title = build_title_hdbank(merchant,payment_type,merchant_id,recon_result,note)

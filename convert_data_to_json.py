@@ -12,6 +12,9 @@ INPUT_FOLDER = "DAILY_RECON/UPC"
 FILE_PREFIX = "RECON_REPORT_INPUT"
 WALLET_INPUT_FOLDER = "DAILY_RECON/WALLET"
 WALLET_FILE_PREFIX = "DS_Daily_gui"
+WALLET_NEW_FILE_PREFIX = "RECON_REPORT_WALLET"
+WALLET_NEW_FILE_PREFIX_INPUT = "RECON_REPORT_WALLET_INPUT"
+WALLET_NEW_FILE_PREFIX_OUTPUT = "RECON_REPORT_WALLET_OUTPUT"
 CSV_FOLDER = "csv_recon_report"
 OUTPUT_JSON = f"{CSV_FOLDER}/recon_export.json"
 BANK_STATEMENT_FOLDER = "DAILY_RECON/STATEMENT"
@@ -204,6 +207,8 @@ def parse_csv_file(csv_file: Path) -> List[Dict[str, Any]]:
             header_index = 2
         elif "RECON_REPORT_INPUT" in csv_file.stem.upper():
             header_index = 0
+        elif "RECON_REPORT_WALLET" in csv_file.stem.upper():
+            header_index = 0
         elif "HDBANK_068704070165977" in csv_file.stem.upper() and "PrintPage" in csv_file.stem:
             header_index = 14
         elif "SAOKE_BVBank_0697041105669" in csv_file.stem:
@@ -344,6 +349,7 @@ def main():
 
     convert_xlsx_to_csv(Path(INPUT_FOLDER), FILE_PREFIX)
     convert_xlsx_to_csv(Path(WALLET_INPUT_FOLDER), WALLET_FILE_PREFIX)
+    convert_xlsx_to_csv(Path(WALLET_INPUT_FOLDER), WALLET_NEW_FILE_PREFIX)
     convert_xls_to_csv(Path(BANK_STATEMENT_FOLDER), BANK_STATEMENT_FILE_PREFIX, CSV_FOLDER)
     
     print("\n" + "=" * 80)
