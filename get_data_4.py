@@ -9,6 +9,7 @@ from collections import defaultdict
 from pathlib import Path
 import sys
 import os
+from convert_data_to_json import FILE_PREFIX, WALLET_FILE_PREFIX, WALLET_NEW_FILE_PREFIX, WALLET_NEW_FILE_PREFIX_INPUT, WALLET_NEW_FILE_PREFIX_OUTPUT
 from export_upload_file_1 import get_date_range_from_filename, parse_posting_date_from_filename, extract_hdbank_merchant, extract_bvbank_merchant
 from helper import normalize_posting_date
 
@@ -26,6 +27,7 @@ RECON_RESULT_KEY = "Kết quả đối soát"
 NOTE_KEY = "Ghi chú"
 REFER_NUM_KEY = "Số tham chiếu"
 POSTING_DATE_KEY = "Ngày giao dịch"
+POSTING_DATE_NEW_WALLET_KEY = "Transaction Date"
 IS_CHARGE_KEY = "IsChargeFee"
 
 
@@ -146,8 +148,11 @@ def process_file_data(file_name, rows):
         REFER_NUM_KEY: "",
     })
 
-    is_recon_input = "RECON_REPORT_INPUT" in file_name
-    is_daily_wallet = "DS_Daily" in file_name
+    is_recon_input = FILE_PREFIX in file_name
+    is_daily_wallet = WALLET_FILE_PREFIX in file_name
+    is_new_daily_wallet = WALLET_NEW_FILE_PREFIX in file_name
+    is_new_daily_wallet_input = WALLET_NEW_FILE_PREFIX_INPUT in file_name
+    is_new_daily_wallet_output = WALLET_NEW_FILE_PREFIX_OUTPUT in file_name
     is_HDBANK = "HDBANK_068704070165977" in file_name
     is_BVB = "BVBank_0697041105669" in file_name
     # ======================================================
@@ -162,7 +167,9 @@ def process_file_data(file_name, rows):
         month_match = re.search(pattern_months, file_name)
 
         posting_date = row.get(
-            POSTING_DATE_KEY, ""
+            POSTING_DATE_KEY, row.get(
+            POSTING_DATE_NEW_WALLET_KEY, ""
+        )
         ).split(" ")[0]
 
         if days_match:
@@ -993,7 +1000,7 @@ def process_file_data(file_name, rows):
                 CURRENCY_KEY,
                 ""
             ).strip()
-
+            
             origin_date = ""
 
             merchant_name = payment_partner
@@ -1110,6 +1117,307 @@ def process_file_data(file_name, rows):
             if not info["origin_date"]:
                 info["origin_date"] = origin_date
             info[REFER_NUM_KEY] = refer_num
+    elif is_new_daily_wallet:
+
+        # ==================================================
+        # 1. BANK SIDE
+        # ==================================================
+        if is_new_daily_wallet_input:
+            print("[INFO] Processing BANK side")
+
+            for row in rows:
+
+                bank_partner = row.get(
+                    "Provider",
+                    ""
+                ).strip()
+
+                # Không phải Bank row -> skip
+                if not bank_partner:
+                    continue
+
+                posting_date, days_match = get_posting_date(row)
+
+                note_raw = row.get(
+                    "Note",
+                    ""
+                ).strip()
+
+                currency = row.get(
+                    "Currency",
+                    ""
+                ).strip()
+
+                origin_date = row.get(
+                    "GpTransDate",
+                    ""
+                ).strip()
+                refer_num = str(
+                    row.get(
+                    REFER_NUM_KEY,
+                    ""
+                    ) or ""
+                    ).strip()
+                origin_date = ""
+                merchant_name = bank_partner
+                merchant_id = bank_partner
+
+                raw_payment_type = row.get(
+                    "TransType",
+                    ""
+                ).strip()
+
+                recon_text = row.get(
+                    "Reconciliation Status",
+                    ""
+                ).strip()
+                # refer_num = str(
+                #     row.get(
+                #         "GPC TransactionCode",
+                #         ""
+                #     ) or ""
+                # ).strip()
+                # ==================================================
+                # PAYMENT TYPE
+                # ==================================================
+
+                if raw_payment_type == "PAYMENT-CASHIN":
+                    payment_type = "CASHIN"
+                else:
+                    payment_type = raw_payment_type
+
+                # ==================================================
+                # RECON RESULT
+                # ==================================================
+                
+                recon_result = recon_text
+
+                
+                # ==================================================
+                # NAPAS
+                # ==================================================
+
+                # if bank_partner.upper() == "NAPAS":
+
+                #     if (
+                #         recon_text == "Lệch (Đối tác nhiều hơn)"
+                #         and payment_type == "CASHIN"
+                #     ):
+                #         recon_result = "MISS_PARTNER"
+
+                #     elif (
+                #         recon_text == "Xử lý lệch (Galaxy Pay nhiều hơn)"
+                #         and payment_type == "CASHIN"
+                #     ):
+                #         recon_result = "GPAY_MORE"
+
+                #     elif (
+                #         recon_text == "Xử lý lệch (Đối tác nhiều hơn)"
+                #     ):
+                #         recon_result = "PARTNER_MORE"
+                #         posting_date = parse_posting_date_from_filename(file_name)
+
+                # ==================================================
+                # TRANSFER
+                # ==================================================
+
+                if "TRANSFER" in payment_type:
+                    recon_result = ""
+
+                # ==================================================
+                # AMOUNT BANK
+                # ==================================================
+
+                try:
+                    amount = int(float(
+                        row.get(
+                            "Trans Amount",
+                            0
+                        )
+                    ))
+                except:
+                    amount = 0
+
+                note_group = ""
+
+                # ==================================================
+                # GROUP BANK
+                # ==================================================
+                # refer_num = str(
+                #     row.get(
+                #         "GPC TransactionCode",
+                #         ""
+                #     ) or ""
+                # ).strip()
+                add_group(
+                    merchant_name=merchant_name,
+                    merchant_id=merchant_id,
+                    payment_type=payment_type,
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw="",
+                    refer_num = refer_num
+                    
+                )
+                # group_key = (
+                #     merchant_name,
+                #     merchant_id,
+                #     payment_type,
+                #     recon_result,
+                #     posting_date,
+                #     note_group,
+                #     refer_num
+                # )
+
+                # info = grouped_data[group_key]
+
+                # info["total_amount"] += amount
+                # info["txn_count"] += 1
+                # info["currencies"].add(currency)
+                # info[POSTING_DATE_KEY] = posting_date
+
+                # if not info["note_raw"]:
+                #     info["note_raw"] = note_raw
+
+                # if not info["origin_date"]:
+                #     info["origin_date"] = origin_date
+                    
+                # info[REFER_NUM_KEY] = refer_num
+
+        # ==================================================
+        # 2. PAYMENT SIDE
+        # ==================================================
+        if is_new_daily_wallet_output:
+            print("[INFO] Processing PAYMENT side")
+
+            for row in rows:
+                # refer_num = str(
+                #     row.get(
+                #         "GPC TransactionCode",
+                #         ""
+                #     ) or ""
+                # ).strip()
+                payment_partner = row.get(
+                    "Provider",
+                    ""
+                ).strip()
+
+                # Không phải Payment row -> skip
+                if not payment_partner:
+                    continue
+
+                posting_date, days_match = get_posting_date(row)
+
+                note_raw = row.get(
+                    "Note",
+                    ""
+                ).strip()
+
+                currency = row.get(
+                    "Currency",
+                    ""
+                ).strip()
+
+                origin_date = row.get(
+                    "GpTransDate",
+                    ""
+                ).strip()
+                refer_num = str(
+                    row.get(
+                    REFER_NUM_KEY,
+                    ""
+                    ) or ""
+                    ).strip()
+                origin_date = ""
+                merchant_name = payment_partner
+
+                merchant_id = row.get(
+                    "Merchant Name",
+                    ""
+                ).strip()
+
+                raw_payment_type = row.get(
+                    "TransType",
+                    ""
+                ).strip()
+
+                # ==================================================
+                # PAYMENT TYPE
+                # ==================================================
+
+                if raw_payment_type == "PAYMENT-CASHIN":
+                    payment_type = "PAYMENT"
+                else:
+                    payment_type = raw_payment_type
+
+                recon_text = row.get(
+                    "Reconciliation Status",
+                    ""
+                ).strip()
+
+                # ==================================================
+                # PARTNER MORE
+                # ==================================================
+
+                if recon_text == "MISS_PARTNER":
+                    continue
+
+                # ==================================================
+                # RECON RESULT
+                # ==================================================
+
+                recon_result = recon_text
+                # ==================================================
+                # AMOUNT PAYMENT
+                # ==================================================
+
+                try:
+                    amount = int(float(
+                        row.get(
+                            "Trans Amount",
+                            0
+                        )
+                    ))
+                except:
+                    amount = 0
+
+                # ==================================================
+                # GROUP PAYMENT
+                # ==================================================
+                add_group(
+                    merchant_name=merchant_name,
+                    merchant_id=merchant_id,
+                    payment_type=payment_type,
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw="",
+                    refer_num = refer_num
+                    
+                )
+                # note_group = ""
+                # group_key = (
+                #     merchant_name,
+                #     merchant_id,
+                #     payment_type,
+                #     recon_result,
+                #     posting_date,
+                #     note_group,
+                #     refer_num
+                # )
+
+                # info = grouped_data[group_key]
+
+                # info["total_amount"] += amount
+                # info["txn_count"] += 1
+                # info["currencies"].add(currency)
+                # info[POSTING_DATE_KEY] = posting_date
+
+                # if not info["note_raw"]:
+                #     info["note_raw"] = note_raw
+
+                # if not info["origin_date"]:
+                #     info["origin_date"] = origin_date
+                # info[REFER_NUM_KEY] = refer_num
     
     # ======================================================
     # HDBANK_INPUT
