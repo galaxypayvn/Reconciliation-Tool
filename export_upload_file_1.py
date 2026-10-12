@@ -213,6 +213,7 @@ def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, 
         "SKY JOY": "GJoy",
         "GALAXY PAY": "GPAY",
         "IMEDIA JSC_TOPUP": "IMEDIA",
+        "IMEDIA JSC": "IMEDIA",
         "IMEDIABILL": "IMEDIA",
         "IMEDIATOPUP": "IMEDIA",
         "BAO HIEM HD": "HDI",
@@ -242,6 +243,7 @@ def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, 
         "HDBANK": "HDB",
         "HDB-VA": "HDB",
         "IMEDIA JSC_TOPUP": "HDB",
+        "IMEDIA JSC": "HDB",
         "CÔNG TY TNHH BẢO HIỂM HD": "HDB",
         "IMEDIABILL": "HDB",
         "IMEDIATOPUP": "HDB",
@@ -619,6 +621,36 @@ def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, 
 
         business_unit = ""
     
+    # ======================================================
+    # NEW_WALLET_INPUT_FILE
+    # ======================================================
+    if WALLET_NEW_FILE_PREFIX_INPUT in file_name:
+        if merchant == "HDB":
+            if "nạp tiền ví" in title.lower() or "qr nạp tk ví" in title.lower():
+                account = "1121121302" if dr_cr == "Nợ" else "3388401000"
+                business_unit = "" if dr_cr == "Nợ" else "0037360001"
+        elif merchant == "HDBANK":
+            if "nạp tiền tk ví" in title.lower():
+                account = "1121121302" if dr_cr == "Nợ" else "3388401000"
+                business_unit = "" if dr_cr == "Nợ" else "0037360001"
+            elif "lệch qr nạp tk ví" in title.lower():
+                account = "1121121302" if dr_cr == "Nợ" else "3388402000"
+                business_unit = "" if dr_cr == "Nợ" else "0037360001"
+            elif "rút tiền" in title.lower():
+                account = "3388401000" if dr_cr == "Nợ" else "1121121302"
+                business_unit = "0037360001" if dr_cr == "Nợ" else ""
+        elif merchant == "BIDV":
+            if "nạp tiền" in title.lower():
+                account = "1121123302" if dr_cr == "Nợ" else "3388401000"
+                business_unit = "" if dr_cr == "Nợ" else "0037360001"
+            elif "lệch nạp tiền" in title.lower():
+                account = "1121123302" if dr_cr == "Nợ" else "3388402000"
+                business_unit = "" if dr_cr == "Nợ" else "0037360001"
+            elif "rút tiền" in title.lower():
+                account = "3388401000" if dr_cr == "Nợ" else "1121123302"
+                business_unit = "0037360001" if dr_cr == "Nợ" else ""
+            
+    
     return {
         # "document_type": document_type,
         "account": account,
@@ -829,13 +861,14 @@ def build_title_wallet(
         "GPAY": "GPay",
         "IMEDIA": "Imedia",
         "BIDV": "BIDV",
-        "HDBANK": "HDB",
+        "HDBANK": "HDBANK",
         "HDB": "HDB",
         "HDB-VA": "HDB",
         "CÔNG TY TNHH BẢO HIỂM HD": "GPay",
         "IMEDIA JSC_TOPUP": "Imedia",
-        "IMediaBill": "Imedia",
-        "IMediaTopup": "Imedia",
+        "IMEDIA JSC": "Imedia",
+        "IMEDIABILL": "Imedia",
+        "IMEDIATOPUP": "Imedia",
         "SKY JOY": "GPay",
         "SKY FI": "GPay",
         "SKYFI": "GPay",
@@ -881,6 +914,7 @@ def build_title_wallet(
         "VINCLUB": "VinApp",
         "MENAS STORE": "Menas",
         "HDBANK": "",
+        "HDB": "",
         "BIDV": "",
         
     }
@@ -912,21 +946,24 @@ def build_title_wallet(
     # HDB / BIDV Wallet
     # ======================================================
 
-    if merchant_name in ["HDB", "BIDV"]:
+    if merchant_name in ["HDB", "BIDV", "HDBANK"]:
 
         bank = merchant_name
 
         if payment_type == "CASHOUT":
-
+            
             if recon_result == "MATCH_SUCCESS":
-                return f"{bank}-Rút tiền từ TK Ví"
+                bank = "HDB" if "HDB" in bank else bank
+                if bank == "BIDV":
+                    return f"{bank}-Rút tiền TK Ví GPay"
+                return f"{bank}-Rút tiền TK Ví"
 
             elif recon_result == "MISS_GPAY":
                 return f"{bank}-Lệch Rút tiền Ví(GP)"
 
             elif recon_result == "GPAY_MORE":
                 return f"{bank}-HLệch Rút tiền Ví(GP)"
-
+            
         elif payment_type in [
             "CASHIN",
             "PAYMENT-CASHIN",
@@ -934,13 +971,21 @@ def build_title_wallet(
         ]:
 
             if recon_result == "MATCH_SUCCESS":
-                if business == "":
-                    return f"{bank}-GD QR"
+                if merchant_name == "HDB":
+                    return f"{bank}-QR Nạp TK Ví"
+                if merchant_name == "HDBANK":
+                    return f"HDB-Nạp tiền TK Ví"
+                if merchant_name == "BIDV":
+                    return f"{bank}-Nạp tiền TK Ví GPay"
                 return f"{bank}-GD QR {business}"
 
             elif recon_result == "MISS_GPAY" or recon_result == "GPAY_MORE":
                 return f"{bank}-XLý Lệch Nạp tiền Ví"
-            
+            elif recon_result == "MISS_PARTNER":
+                if bank == "BIDV":
+                    return f"{bank}-Lệch nạp tiền Ví(ĐT)"
+                elif bank == "HDBANK":
+                    return "HDB-Lệch QR Nạp TK Ví(ĐT)"
     # ======================================================
     # NAPAS Wallet
     # ======================================================
@@ -1600,6 +1645,10 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
             rtitle = f"{rtitle.replace("QR", "GD QR code")}"
         elif "Zalo" in title:
             rtitle = f"{rtitle.replace("Lệch ", "Lệch GD ")}"
+        elif "Lệch QR Nạp TK Ví":
+            rtitle = f"{rtitle.replace("Lệch QR Nạp TK Ví ", "Lệch Nạp tiền vào tài khoản Ví ")}"
+        elif "Lệch Nạp tiền Ví":
+            rtitle = f"{rtitle.replace("Lệch Nạp tiền Ví ", "Lệch Nạp tiền vào tài khoản Ví ")}"
     
     elif "(GP)" in title:
         rtitle = title.split(" (GP)")[0] if " (GP)" in title else title.split("(GP)")[0]
@@ -1618,7 +1667,15 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
         elif "TT" in title:
             rtitle = f"{title.replace(" TT ", " Thanh toán ")} N{posting_date}"
         elif "TK Ví" in title:
-            rtitle = f"{title.replace(" TK Ví", " vào tài khoản ví")} N{posting_date}"
+            if "QR Nạp" in title:
+                rtitle = f"{title.replace("QR Nạp TK Ví", "Nạp tiền vào Ví qua QR Code")} N{posting_date}"
+            elif "Nạp tiền TK Ví GPay" in title:
+                rtitle = f"{title.replace("Nạp tiền TK Ví GPay", "Nạp tiền vào Ví")} N{posting_date}"
+            elif "Rút tiền":
+                title = title.replace("GPay") if "Gpay" in title else title
+                rtitle = f"{title.replace("Rút tiền TK Ví", "Rút tiền từ TK Ví")} N{posting_date}"
+            else:
+                rtitle = f"{title.replace(" TK Ví", " vào tài khoản ví")} N{posting_date}"
         elif merchant_id == "BAO HIEM HD - PORTAL":
             rtitle = f"{title.replace("HDI", "HDI-Portal")} N{posting_date}"
         else:
@@ -1983,6 +2040,10 @@ def main():
 
 # upload_file_16-50_31-07-2026.csv
     output_file = OUTPUT_FILE.replace(".csv", f"_{timestamp}.csv")
+    rows_out.sort(
+        key=lambda row: (
+            row.get("Ngày hạch toán", "")).strip().lower()
+    )
     # write CSV
     with open(output_file, "w", newline="", encoding="utf-8-sig") as f:
         fieldnames = list(rows_out[0].keys())

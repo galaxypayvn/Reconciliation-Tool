@@ -821,7 +821,7 @@ def process_file_data(file_name, rows):
                 # PAYMENT TYPE
                 # ==================================================
 
-                if raw_payment_type == "PAYMENT-CASHIN":
+                if "CASHIN" in raw_payment_type or raw_payment_type == "PAYMENT":
                     payment_type = "CASHIN"
                 else:
                     payment_type = raw_payment_type
@@ -938,7 +938,7 @@ def process_file_data(file_name, rows):
                 #     ) or ""
                 # ).strip()
                 payment_partner = row.get(
-                    "Provider",
+                    "Merchant Name",
                     ""
                 ).strip()
 
@@ -975,7 +975,18 @@ def process_file_data(file_name, rows):
                     "Merchant Name",
                     ""
                 ).strip()
-
+                tran_service = row.get(
+                    "Trans Service",
+                    ""
+                ).strip()
+                if "IMEDIA" in merchant_id:
+                    if "BILL" in tran_service:
+                        merchant_name = "IMEDIABILL"
+                        merchant_id = "IMEDIABILL"
+                    elif "TOPUP" in tran_service:
+                        merchant_name = "IMEDIATOPUP"
+                        merchant_id = "IMEDIATOPUP"
+                
                 raw_payment_type = row.get(
                     "TransType",
                     ""
@@ -985,7 +996,7 @@ def process_file_data(file_name, rows):
                 # PAYMENT TYPE
                 # ==================================================
 
-                if raw_payment_type == "PAYMENT-CASHIN":
+                if "CASHIN" in raw_payment_type:
                     payment_type = "PAYMENT"
                 else:
                     payment_type = raw_payment_type
