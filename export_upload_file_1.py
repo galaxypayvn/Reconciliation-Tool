@@ -864,6 +864,7 @@ def build_title_wallet(
         "HDBANK": "HDBANK",
         "HDB": "HDB",
         "HDB-VA": "HDB",
+        "BMI - ABBANK": "BMI-ABBANK",
         "CÔNG TY TNHH BẢO HIỂM HD": "GPay",
         "IMEDIA JSC_TOPUP": "Imedia",
         "IMEDIA JSC": "Imedia",
@@ -1225,7 +1226,7 @@ def build_title_upc(
         "SKYFI": "SKYFI",
         "SKY JOY": "GJoy",
         "SKYJOY": "GJoy",
-        "BMI - ABBANK": "BMGĐ",
+        "BMI - ABBANK": "BMI-ABBANK",
         "BAO HIEM HD": "HDI",
         "BAO HIEM HD - PORTAL": "HDI",
         "CÔNG TY TNHH BẢO HIỂM HD": "HDI",
@@ -1240,7 +1241,7 @@ def build_title_upc(
         "VINCLUB": "VinApp",
         "Galaxy Pay": "test",
         "MENAS STORE": "Menas",
-        "GIAC MO BAY RE": "Giấc Mơ Bay Rẻ"
+        "GIAC MO BAY RE": "GMBR"
     }
 
     business = merchant_mapping.get(merchant_id, merchant_id)
@@ -1613,8 +1614,10 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
     
     if "MPGS-GD UPC" in title:
         title = title.replace("UPC ", "")
-    if "BMGĐ" in title:
-        title = title.replace("BMGĐ", "BAO MINH GIA DINH")
+    # if "BMI - ABBANK" in title:
+    #     title = title.replace("BMGĐ", "BAO MINH GIA DINH")
+    if "GMBR" in title:
+        title = title.replace("GMBR", "Giấc Mơ Bay Rẻ")
     
     if merchant_id == "VJ WEB SKYSHOP":
         title = f"{title}-SKYSHOP"
