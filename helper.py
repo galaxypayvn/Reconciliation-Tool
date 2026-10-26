@@ -595,9 +595,12 @@ def convert_payment_info_to_output(payment_info: str) -> str:
     #
     # N04/06/26 -> N04/06/2026
     # N18/06/26 -> N18/06/2026
+    #
+    # (?!\d): không match 2 số đầu của năm 4 chữ số
+    # (N15/06/2026 -> N15/06/202026)
     # ==========================================================
     date_part = re.sub(
-        r"N(\d{1,2})/(\d{1,2})/(\d{2})",
+        r"N(\d{1,2})/(\d{1,2})/(\d{2})(?!\d)",
         lambda m: (
             f"N{int(m.group(1)):02d}/"
             f"{int(m.group(2)):02d}/"
@@ -653,13 +656,6 @@ def convert_payment_info_to_output(payment_info: str) -> str:
     #
     # (GD QR, ND) -> (QR,NĐ)
     # ==========================================================
-    date_part = re.sub(
-        r"\(\s*GD\s+QR\s*,\s*ND\s*\)",
-        "(QR,NĐ)",
-        date_part,
-        flags=re.IGNORECASE
-    )
-
     date_part = re.sub(
         r"\(\s*GD\s+QR\s*,\s*ND\s*\)",
         "(QR,NĐ)",
@@ -725,10 +721,13 @@ def convert_payment_info_to_output(payment_info: str) -> str:
     #
     # N01/06/2026 (QT)
     # -> N01/06/2026(QT)
+    #
+    # N04-06/09/2026 (QR,NĐ)
+    # -> N04-06/09/2026(QR,NĐ)
     # ==========================================================
     date_part = re.sub(
-        r"\s+\((QT|NĐ|QR)(?:,NĐ)?\)",
-        r"(\1)",
+        r"\s+(\((?:QT|NĐ|QR)(?:,NĐ)?\))",
+        r"\1",
         date_part
     )
 
@@ -787,7 +786,7 @@ def convert_payment_info_to_output(payment_info: str) -> str:
     # ==========================================================
     date_part = date_part.strip(" ;")
 
-    return f"Chuyển tiền {merchant} {date_part}".strip()
+    return f"{output_prefix} {merchant} {date_part}".strip()
 
 
 def normalize_year(year: str) -> str:

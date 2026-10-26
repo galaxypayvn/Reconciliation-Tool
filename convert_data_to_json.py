@@ -213,7 +213,12 @@ def parse_csv_file(csv_file: Path) -> List[Dict[str, Any]]:
             header_index = 14
         elif "SAOKE_BVBank_0697041105669" in csv_file.stem:
             header_index = 15
-        if not all_rows:
+        else:
+            raise ValueError(
+                f"Unknown file type, cannot determine header row: {csv_file.name}"
+            )
+
+        if len(all_rows) <= header_index:
             return []
 
         headers = [
@@ -251,6 +256,7 @@ def scan_csv_folder() -> Dict[str, Any]:
     folder = Path(CSV_FOLDER)
 
     result = {}
+    failed_files = []
 
     # csv_files = sorted(folder.glob("*.csv"))
     keywords = (
@@ -269,6 +275,14 @@ def scan_csv_folder() -> Dict[str, Any]:
 
     for csv_file in csv_files:
 
+        # Sao kê HDBANK chỉ dùng sheet PrintPage, các sheet khác (Sheet2, Sheet3...) bỏ qua
+        if (
+            "HDBANK_068704070165977" in csv_file.stem.upper()
+            and "PrintPage" not in csv_file.stem
+        ):
+            print(f"[SKIP] Unused HDBANK sheet: {csv_file.name}")
+            continue
+
         try:
 
             data = parse_csv_file(csv_file)
@@ -286,25 +300,18 @@ def scan_csv_folder() -> Dict[str, Any]:
 
         except Exception as exc:
 
-            result[csv_file.name] = {
-                "__error__": str(exc)
-            }
+            failed_files.append(f"{csv_file.name}: {exc}")
 
             print(
                 f"[ERROR] Failed "
                 f"{csv_file.name}: {exc}"
             )
-            try:
-                csv_file.unlink()
-                print(
-                    f"[INFO] Deleted invalid CSV: "
-                    f"{csv_file.name}"
-                )
-            except Exception as delete_error:
-                print(
-                    f"[ERROR] Cannot delete CSV "
-                    f"{csv_file.name}: {delete_error}"
-                )
+
+    # Dừng pipeline thay vì bỏ qua file lỗi (giữ lại CSV để kiểm tra)
+    if failed_files:
+        raise RuntimeError(
+            "Cannot parse CSV files:\n  " + "\n  ".join(failed_files)
+        )
 
     return result
 
