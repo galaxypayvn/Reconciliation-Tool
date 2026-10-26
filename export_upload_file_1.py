@@ -819,7 +819,7 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
     if merchant == "HDBANK_STATEMENT" or "HDBANK" in file_name or "SAOKE_BVBANK" in file_name.upper():
         if "Phát sinh có" in note:
             account = account_hd_bvb if dr_cr == "Nợ" else "1388404200"
-            if "NAPAS-BC" in title:
+            if "NAPAS-BC" in title.upper() and dr_cr == "Có":
                 account = "1388404300"
             business_unit = "" if dr_cr == "Nợ" else partner_bu
         elif "Phí" in title:
@@ -969,11 +969,14 @@ def build_title_wallet(
                 return f"{bank}-Rút tiền TK Ví"
 
             elif recon_result == "MISS_GPAY":
+                bank = "HDB" if "HDB" in bank else bank
                 return f"{bank}-Lệch Rút tiền Ví(GP)"
 
             elif recon_result == "GPAY_MORE":
+                bank = "HDB" if "HDB" in bank else bank
                 return f"{bank}-HLệch Rút tiền Ví(GP)"
             elif recon_result == "MISS_PARTNER":
+                bank = "HDB" if "HDB" in bank else bank
                 return f"{bank}-Lệch Rút tiền Ví(GP)"
             
         elif payment_type in [
@@ -1702,7 +1705,7 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
     #=============HDBANK_STATEMENT=============
     if "HDB-Báo có GD QR" in title:
         rtitle = f"{title} N{posting_date}" 
-    elif "BC GD" in title and payment_type == "PAYMENT_RECEIVED":
+    elif ("BC GD" in title or "BC DV UPC" in title) and payment_type == "PAYMENT_RECEIVED":
         rtitle = f"{title} N{posting_date_1}"
     elif "MPGS Phí" in title:
         rtitle = title
