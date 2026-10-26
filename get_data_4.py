@@ -28,7 +28,32 @@ NOTE_KEY = "Ghi chú"
 REFER_NUM_KEY = "Số tham chiếu"
 POSTING_DATE_KEY = "Ngày giao dịch"
 POSTING_DATE_NEW_WALLET_KEY = "Transaction Date"
+GP_TRANS_DATE_KEY = "GpTransDate"
 IS_CHARGE_KEY = "IsChargeFee"
+
+# Reconciliation Status của file RECON_REPORT_WALLET_INPUT/OUTPUT -> recon_result.
+# Phần lớn đã là mã chuẩn, một số dòng vẫn là text tiếng Việt như file DS_Daily cũ.
+NEW_WALLET_RECON_STATUS = {
+    "MATCH_SUCCESS": "MATCH_SUCCESS",
+    "MISS_GPAY": "MISS_GPAY",
+    "MISS_PARTNER": "MISS_PARTNER",
+    "GPAY_MORE": "GPAY_MORE",
+    "PARTNER_MORE": "PARTNER_MORE",
+    "Khớp": "MATCH_SUCCESS",
+    "Lệch (Galaxy Pay nhiều hơn)": "MISS_GPAY",
+    "Lệch (Đối tác nhiều hơn)": "MISS_PARTNER",
+    "Xử lý lệch (Galaxy Pay nhiều hơn)": "GPAY_MORE",
+    "Xử lý lệch (Đối tác nhiều hơn)": "PARTNER_MORE",
+}
+
+
+def normalize_new_wallet_recon_status(recon_text, file_name):
+    if recon_text not in NEW_WALLET_RECON_STATUS:
+        raise ValueError(
+            f"Unknown Reconciliation Status '{recon_text}' in file {file_name}"
+        )
+
+    return NEW_WALLET_RECON_STATUS[recon_text]
 
 
 def get_posting_date_from_range(cell_value, file_name):
@@ -172,6 +197,13 @@ def process_file_data(file_name, rows):
         )
         ).split(" ")[0]
 
+        # Ví mới: GD đối tác không ghi nhận (MISS_PARTNER...) thì Transaction Date
+        # trống -> lấy ngày phía Galaxy Pay
+        if not posting_date and row.get(GP_TRANS_DATE_KEY):
+            posting_date = normalize_posting_date(
+                row[GP_TRANS_DATE_KEY].split(" ")[0]
+            )
+
         if days_match:
             posting_date = parse_posting_date_from_filename(file_name)
 
@@ -196,12 +228,13 @@ def process_file_data(file_name, rows):
             posting_date,
             amount,
             note_raw,
-            refer_num=""
+            refer_num="",
+            # Sao kê HDBANK / BVBANK không có kết quả đối soát -> MATCH_SUCCESS
+            recon_result="MATCH_SUCCESS"
         ):
             if not posting_date or amount == 0:
                 return
 
-            recon_result = "MATCH_SUCCESS"
             note_group = note_raw
             
             group_key = (
@@ -829,8 +862,11 @@ def process_file_data(file_name, rows):
                 # ==================================================
                 # RECON RESULT
                 # ==================================================
-                
-                recon_result = recon_text
+
+                recon_result = normalize_new_wallet_recon_status(
+                    recon_text,
+                    file_name
+                )
 
                 
                 # ==================================================
@@ -863,7 +899,11 @@ def process_file_data(file_name, rows):
 
                 if "TRANSFER" in payment_type:
                     recon_result = ""
-
+                elif (
+                    recon_text == "Xử lý lệch (Đối tác nhiều hơn)"
+                ):
+                    recon_result = "PARTNER_MORE"
+                    posting_date = parse_posting_date_from_filename(file_name)
                 # ==================================================
                 # AMOUNT BANK
                 # ==================================================
@@ -896,8 +936,8 @@ def process_file_data(file_name, rows):
                     posting_date=posting_date,
                     amount=amount,
                     note_raw="",
-                    refer_num = refer_num
-                    
+                    refer_num = refer_num,
+                    recon_result=recon_result
                 )
                 # group_key = (
                 #     merchant_name,
@@ -1010,14 +1050,17 @@ def process_file_data(file_name, rows):
                 # PARTNER MORE
                 # ==================================================
 
-                if recon_text == "MISS_PARTNER":
-                    continue
+                # if recon_text == "MISS_PARTNER":
+                #     continue
 
                 # ==================================================
                 # RECON RESULT
                 # ==================================================
 
-                recon_result = recon_text
+                recon_result = normalize_new_wallet_recon_status(
+                    recon_text,
+                    file_name
+                )
                 # ==================================================
                 # AMOUNT PAYMENT
                 # ==================================================
@@ -1042,8 +1085,8 @@ def process_file_data(file_name, rows):
                     posting_date=posting_date,
                     amount=amount,
                     note_raw="",
-                    refer_num = refer_num
-                    
+                    refer_num = refer_num,
+                    recon_result=recon_result
                 )
                 # note_group = ""
                 # group_key = (
@@ -1409,18 +1452,26 @@ def process_file_data(file_name, rows):
                 "posting_date": posting_date,
                 "payment_info": payment_info,
                 "debit_amount": debit_amount,
-                "credit_amount": credit_amount
+                "credit_amount": credit_amount,
+                "refer_num": refer_num
             })
 
         # ============================================================
         # 1. PHÁT SINH NỢ
         # ============================================================
 
+        # Index các dòng phí đã được hạch toán cùng dòng chuyển tiền
+        consumed_fee_indexes = set()
+
         for item in processed_rows:
+
+            if item["index"] in consumed_fee_indexes:
+                continue
 
             posting_date = item["posting_date"]
             payment_info = item["payment_info"]
             debit_amount = item["debit_amount"]
+            refer_num = item["refer_num"]
 
             if not posting_date:
                 print(
@@ -1459,35 +1510,32 @@ def process_file_data(file_name, rows):
 
                 payment_type = "TRANSFER"
                 merchant_id = extract_bvbank_merchant(payment_info)
-                if next_item:
 
-                    next_info = next_item["payment_info"]
+                add_group(
+                    merchant_name=merchant_name,
+                    merchant_id=merchant_id,
+                    payment_type=payment_type,
+                    posting_date=posting_date,
+                    amount=debit_amount,
+                    note_raw=f"Phát sinh nợ {payment_info}",
+                    refer_num = refer_num
+                )
 
-                    # Nếu dòng tiếp theo có cùng diễn giải
-                    if (
-                        next_info
-                        and next_info == payment_info
-                    ):
-                        add_group(
-                        merchant_name=merchant_name,
-                        merchant_id=merchant_id,
-                        payment_type=payment_type,
-                        posting_date=posting_date,
-                        amount=debit_amount,
-                        note_raw=f"Phát sinh nợ {payment_info}",
-                        refer_num = refer_num
-                    )
-                        add_group(
+                # Nếu dòng tiếp theo có cùng diễn giải -> dòng phí
+                if (
+                    next_item
+                    and next_item["payment_info"] == payment_info
+                ):
+                    add_group(
                         merchant_name=merchant_name,
                         merchant_id="GPay",
                         payment_type="FEE",
                         posting_date=posting_date,
                         amount=next_item["debit_amount"],
                         note_raw=f"Phát sinh nợ {payment_info}",
-                        refer_num = refer_num
+                        refer_num = next_item["refer_num"]
                     )
-
-                
+                    consumed_fee_indexes.add(next_item["index"])
 
                 continue
 
@@ -1546,7 +1594,8 @@ def process_file_data(file_name, rows):
                 posting_date=interest_posting_date,
                 amount=total_interest,
                 note_raw="Phát sinh có TRA LAI TIEN GUI",
-                refer_num = refer_num
+                # Gom nhiều dòng -> không có 1 số tham chiếu duy nhất
+                refer_num = ""
             )
 
         # ============================================================
@@ -1755,7 +1804,7 @@ def process_file_data(file_name, rows):
                 posting_date=sunday.strftime("%d/%m/%Y"),
                 amount=weekend_amount,
                 note_raw="Phát sinh có BVBANK WEEKEND",
-                refer_num = refer_num
+                refer_num = ""
             )
 
             # Đánh dấu đã xử lý
@@ -1787,7 +1836,7 @@ def process_file_data(file_name, rows):
                 posting_date=date_obj.strftime("%d/%m/%Y"),
                 amount=amount,
                 note_raw="Phát sinh có BVBANK PAYMENT",
-                refer_num = refer_num
+                refer_num = ""
             )
     #     # ============================================================
     #     # 2.4 HẠCH TOÁN

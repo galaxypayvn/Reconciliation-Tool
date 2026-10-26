@@ -447,7 +447,7 @@ def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, 
                     account = "3388402000"
                 else:
                     account = "3388401000"
-            elif "HLỆCH" in title_upper or "Hoàn LỆCH" in title_upper:
+            elif "HLỆCH" in title_upper or "HOÀN LỆCH" in title_upper:
                 business_unit = merchant_bu if dr_cr == "Nợ" else partner_bu
                 if dr_cr == "Nợ":
                     account = "3388402000"
@@ -556,7 +556,7 @@ def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, 
             else:
                 account = "3388403100"
         
-        elif "HLệch TEST" in title_upper:
+        elif "HLỆCH TEST" in title_upper:
             if dr_cr == "Nợ":
                 account = "3388403300"
                 business_unit = "1080"
@@ -626,8 +626,11 @@ def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, 
     # ======================================================
     if WALLET_NEW_FILE_PREFIX_INPUT in file_name:
         if merchant == "HDB":
-            if "nạp tiền ví" in title.lower() or "qr nạp tk ví" in title.lower():
+            if ("nạp tiền ví" in title.lower() or "qr nạp tk ví" in title.lower()) and "lệch" not in title.lower():
                 account = "1121121302" if dr_cr == "Nợ" else "3388401000"
+                business_unit = "" if dr_cr == "Nợ" else "0037360001"
+            elif "lệch qr nạp tk ví" in title.lower():
+                account = "1121121302" if dr_cr == "Nợ" else "3388402000"
                 business_unit = "" if dr_cr == "Nợ" else "0037360001"
         elif merchant == "HDBANK":
             if "nạp tiền tk ví" in title.lower():
@@ -636,6 +639,9 @@ def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, 
             elif "lệch qr nạp tk ví" in title.lower():
                 account = "1121121302" if dr_cr == "Nợ" else "3388402000"
                 business_unit = "" if dr_cr == "Nợ" else "0037360001"
+            elif "lệch rút tiền" in title.lower():
+                account = "3388401000" if dr_cr == "Nợ" else "3388402000"
+                business_unit = "0037360001"
             elif "rút tiền" in title.lower():
                 account = "3388401000" if dr_cr == "Nợ" else "1121121302"
                 business_unit = "0037360001" if dr_cr == "Nợ" else ""
@@ -646,6 +652,9 @@ def build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, 
             elif "lệch nạp tiền" in title.lower():
                 account = "1121123302" if dr_cr == "Nợ" else "3388402000"
                 business_unit = "" if dr_cr == "Nợ" else "0037360001"
+            elif "lệch rút tiền" in title.lower():
+                account = "3388401000" if dr_cr == "Nợ" else "3388402000"
+                business_unit = "0037360001"
             elif "rút tiền" in title.lower():
                 account = "3388401000" if dr_cr == "Nợ" else "1121123302"
                 business_unit = "0037360001" if dr_cr == "Nợ" else ""
@@ -964,6 +973,8 @@ def build_title_wallet(
 
             elif recon_result == "GPAY_MORE":
                 return f"{bank}-HLệch Rút tiền Ví(GP)"
+            elif recon_result == "MISS_PARTNER":
+                return f"{bank}-Lệch Rút tiền Ví(GP)"
             
         elif payment_type in [
             "CASHIN",
@@ -981,6 +992,8 @@ def build_title_wallet(
                 return f"{bank}-GD QR {business}"
 
             elif recon_result == "MISS_GPAY" or recon_result == "GPAY_MORE":
+                if merchant_name == "HDB":
+                    return f"{bank}-Lệch QR Nạp TK Ví"
                 return f"{bank}-XLý Lệch Nạp tiền Ví"
             elif recon_result == "MISS_PARTNER":
                 if bank == "BIDV":
@@ -1008,8 +1021,9 @@ def build_title_wallet(
 
                 if "lệch ngày" in note_lower:
                     return "Napas-Nạp tiền TK Ví"
-
-                if "xử lý" in note_lower:
+                elif recon_result == "MISS_GPAY":
+                    return "Napas-Lệch Nạp Ví (ĐT)"
+                elif "xử lý" in note_lower or recon_result == "PARTNER_MORE":
                     return "Napas-XLLệch Nạp tiền Ví"
 
                 return "Napas-HLệch Nạp Ví (ĐT)"
@@ -1648,9 +1662,9 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
             rtitle = f"{rtitle.replace("QR", "GD QR code")}"
         elif "Zalo" in title:
             rtitle = f"{rtitle.replace("Lệch ", "Lệch GD ")}"
-        elif "Lệch QR Nạp TK Ví":
+        elif "Lệch QR Nạp TK Ví" in title:
             rtitle = f"{rtitle.replace("Lệch QR Nạp TK Ví ", "Lệch Nạp tiền vào tài khoản Ví ")}"
-        elif "Lệch Nạp tiền Ví":
+        elif "Lệch Nạp tiền Ví" in title:
             rtitle = f"{rtitle.replace("Lệch Nạp tiền Ví ", "Lệch Nạp tiền vào tài khoản Ví ")}"
     
     elif "(GP)" in title:
@@ -1674,11 +1688,11 @@ def build_description(title, posting_date, accounting_date, merchant_id, merchan
                 rtitle = f"{title.replace("QR Nạp TK Ví", "Nạp tiền vào Ví qua QR Code")} N{posting_date}"
             elif "Nạp tiền TK Ví GPay" in title:
                 rtitle = f"{title.replace("Nạp tiền TK Ví GPay", "Nạp tiền vào Ví")} N{posting_date}"
-            elif "Rút tiền":
-                title = title.replace("GPay") if "Gpay" in title else title
-                rtitle = f"{title.replace("Rút tiền TK Ví", "Rút tiền từ TK Ví")} N{posting_date}"
             else:
-                rtitle = f"{title.replace(" TK Ví", " vào tài khoản ví")} N{posting_date}"
+                # Trước đây là `elif "Rút tiền":` (luôn True) nên nhánh
+                # " TK Ví" -> " vào tài khoản ví" chưa bao giờ chạy.
+                # Giữ nguyên output đang dùng: "Napas-Nạp tiền TK Ví", "BIDV-Rút tiền từ TK Ví GPay"
+                rtitle = f"{title.replace("Rút tiền TK Ví", "Rút tiền từ TK Ví")} N{posting_date}"
         elif merchant_id == "BAO HIEM HD - PORTAL":
             rtitle = f"{title.replace("HDI", "HDI-Portal")} N{posting_date}"
         else:
@@ -1815,6 +1829,8 @@ def build_document_type(
 
     elif debit.startswith("33") and credit.startswith("33"):
         document_type = "KZ"
+    elif debit.startswith("11") and credit.startswith("33"):
+        document_type = "KZ"
     # ===========================
     # Rule 2
     # ===========================
@@ -1878,9 +1894,10 @@ def main():
                 #print(f"after plus 1 day {accounting_date}")   
             try:
                 amount = float(amount)
-            except:
-                print(f"[WARN] Cannot parse amount: {amount} in file: {file_name}")
-                # amount = 0
+            except ValueError:
+                raise ValueError(
+                    f"Cannot parse amount '{amount}' in file {file_name}, row: {row}"
+                )
 
             # ===== PARSE DATE =====
             # posting_date = parse_date_from_filename(file_name)
@@ -1902,6 +1919,9 @@ def main():
                 title = build_title_hdbank(merchant,payment_type,merchant_id,recon_result,note)
             elif "SAOKE" in file_name.upper():
                 title = build_title_bvb(merchant,payment_type,merchant_id,recon_result,note)
+            else:
+                # Không fallback: tránh dùng lại title của dòng trước
+                raise ValueError(f"Unknown file type, cannot build title: {file_name}")
             if "XLý Lệch Nạp tiền Ví" in title or "HLệch Nạp Ví (ĐT)" in title or "XLLệch Nạp tiền Ví" in title or "HLệch Rút tiền Ví" in title:
                 accounting_date = parse_posting_date_from_filename(file_name)
             
@@ -2033,20 +2053,31 @@ def main():
                         "Trading.Partner ( Phục vụ hợp nhất BCTC)": ""
                     })
                     
-        
-        for i in range(0, len(rows_out), 2):
-            stt = i // 2 + 1
-            rows_out[i]["STT"] = stt
-            rows_out[i + 1]["STT"] = stt
+
+    if not rows_out:
+        raise ValueError(f"No rows to export from {INPUT_FILE}")
+
+    # Sort theo ngày thật (dd/mm/yyyy sort theo chuỗi sẽ sai thứ tự giữa các tháng).
+    # Sort ổn định nên cặp Nợ/Có của cùng 1 chứng từ vẫn đứng liền nhau.
+    def parse_accounting_date(row):
+        try:
+            return datetime.strptime(row.get("Ngày hạch toán", "").strip(), "%d/%m/%Y")
+        except ValueError:
+            return datetime.max
+
+    rows_out.sort(key=parse_accounting_date)
+
+    # Đánh STT sau khi sort: mỗi cặp Nợ/Có chung 1 STT
+    for i in range(0, len(rows_out), 2):
+        stt = i // 2 + 1
+        rows_out[i]["STT"] = stt
+        rows_out[i + 1]["STT"] = stt
+
 # Tạo timestamp: 16-50_31-07-2026
     timestamp = datetime.now().strftime("%H-%M_%d-%m-%Y")
 
 # upload_file_16-50_31-07-2026.csv
     output_file = OUTPUT_FILE.replace(".csv", f"_{timestamp}.csv")
-    rows_out.sort(
-        key=lambda row: (
-            row.get("Ngày hạch toán", "")).strip().lower()
-    )
     # write CSV
     with open(output_file, "w", newline="", encoding="utf-8-sig") as f:
         fieldnames = list(rows_out[0].keys())
