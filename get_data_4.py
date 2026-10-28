@@ -2070,18 +2070,18 @@ def export_to_csv(json_file, output_csv):
             return int(reference)
 
         return float("inf")
-    print("\n========== BEFORE SORT ==========")
+    # print("\n========== BEFORE SORT ==========")
 
-    for row in rows:
-            print(
-                row.get("Ngày chứng từ"),
-                "|",
-                row.get("Ghi chú"),
-                "|",
-                repr(row.get("Số tham chiếu"))
-            )
+    # for row in rows:
+    #         print(
+    #             row.get("Ngày chứng từ"),
+    #             "|",
+    #             row.get("Ghi chú"),
+    #             "|",
+    #             repr(row.get("Số tham chiếu"))
+    #         )
 
-    print("================================\n")
+    # print("================================\n")
 
     rows.sort(
         key=lambda row: (
@@ -2093,18 +2093,18 @@ def export_to_csv(json_file, output_csv):
             get_reference_sort_key(row),
         )
     )
-    print("\n========== AFTER SORT ==========")
+    # print("\n========== AFTER SORT ==========")
 
-    for row in rows:
-            print(
-                row.get("Ngày chứng từ"),
-                "|",
-                row.get("Ghi chú"),
-                "|",
-                repr(row.get("Số tham chiếu"))
-            )
+    # for row in rows:
+    #         print(
+    #             row.get("Ngày chứng từ"),
+    #             "|",
+    #             row.get("Ghi chú"),
+    #             "|",
+    #             repr(row.get("Số tham chiếu"))
+    #         )
 
-    print("================================\n")
+    # print("================================\n")
     
     with open(output_csv, "w", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
