@@ -8,6 +8,14 @@ from get_data_4 import main as get_data_main
 from export_upload_file_1 import main as export_main
 
 
+def use_utf8_output():
+    # Windows: khi output bị redirect ra file / pipe, Python dùng cp1252
+    # -> crash khi in emoji / tiếng Việt (UnicodeEncodeError)
+    for stream in (sys.stdout, sys.stderr):
+        if stream is not None and hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def run_step(name, func):
     print(f"\n{'='*60}")
     print(name)
@@ -42,4 +50,5 @@ def main():
     input("\n Press Enter to close the program...")
 
 if __name__ == "__main__":
+    use_utf8_output()
     main()
