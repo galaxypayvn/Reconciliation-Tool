@@ -10,12 +10,12 @@ from pathlib import Path
 import sys
 import os
 from convert_data_to_json import FILE_PREFIX, WALLET_FILE_PREFIX, WALLET_NEW_FILE_PREFIX, WALLET_NEW_FILE_PREFIX_INPUT, WALLET_NEW_FILE_PREFIX_OUTPUT
-from export_upload_file_1 import get_date_range_from_filename, parse_posting_date_from_filename, extract_hdbank_merchant, extract_bvbank_merchant
-from helper import normalize_posting_date
+from helper import normalize_posting_date, parse_posting_date_from_filename, extract_hdbank_merchant, extract_bvbank_merchant, csv_to_xlsx
 
 INPUT_FILE = "csv_recon_report/recon_export.json"
 SUMMARY_JSON_FILE = "csv_recon_report/recon_summary.json"
 SUMMARY_CSV_FILE = "csv_recon_report/recon_summary.csv"
+SUMMARY_XLSX_FILE = "csv_recon_report/recon_summary.xlsx"
 
 MERCHANT_ID_KEY = "Merchant ID"
 PAYMENT_TYPE_KEY = "Loại giao dịch"
@@ -935,7 +935,7 @@ def process_file_data(file_name, rows):
                     payment_type=payment_type,
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw="",
+                    note_raw=note_raw,
                     refer_num = refer_num,
                     recon_result=recon_result
                 )
@@ -1084,7 +1084,7 @@ def process_file_data(file_name, rows):
                     payment_type=payment_type,
                     posting_date=posting_date,
                     amount=amount,
-                    note_raw="",
+                    note_raw=note_raw,
                     refer_num = refer_num,
                     recon_result=recon_result
                 )
@@ -1989,10 +1989,35 @@ def process_file_data(file_name, rows):
 
     return nested_summary
 
-def export_to_csv(json_file, output_csv):
+SUMMARY_FIELDNAMES = [
+    "File",
+    POSTING_DATE_KEY,
+    MERCHANT_NAME_KEY,
+    MERCHANT_ID_KEY,
+    PAYMENT_TYPE_KEY,
+    RECON_RESULT_KEY,
+    "Tổng số tiền",
+    "Số lượng giao dịch",
+    CURRENCY_KEY,
+    ORIGIN_PAYMENT_DATE_KEY,
+    NOTE_KEY,
+    REFER_NUM_KEY
+]
+
+
+def load_summary_rows(json_file=SUMMARY_JSON_FILE):
+    """
+    Đọc recon_summary.json -> list row phẳng (cùng cột, bộ lọc, thứ tự
+    với recon_summary.csv). Dùng chung cho export_to_csv và export_upload_file_1.
+    """
 
     with open(json_file, "r", encoding="utf-8") as f:
         data = json.load(f)
+
+    return build_summary_rows(data)
+
+
+def build_summary_rows(data):
 
     rows = []
 
@@ -2022,21 +2047,6 @@ def export_to_csv(json_file, output_csv):
                                         )
                                     })
 
-    fieldnames = [
-        "File",
-        POSTING_DATE_KEY,
-        MERCHANT_NAME_KEY,
-        MERCHANT_ID_KEY,
-        PAYMENT_TYPE_KEY,
-        RECON_RESULT_KEY,
-        "Tổng số tiền",
-        "Số lượng giao dịch",
-        CURRENCY_KEY,
-        ORIGIN_PAYMENT_DATE_KEY,
-        NOTE_KEY,
-        REFER_NUM_KEY
-    ]
-    
     def parse_csv_date(value):
         try:
             return datetime.strptime(
@@ -2105,9 +2115,16 @@ def export_to_csv(json_file, output_csv):
     #         )
 
     # print("================================\n")
-    
+
+    return rows
+
+
+def export_to_csv(json_file, output_csv):
+
+    rows = load_summary_rows(json_file)
+
     with open(output_csv, "w", newline="", encoding="utf-8-sig") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer = csv.DictWriter(f, fieldnames=SUMMARY_FIELDNAMES)
         writer.writeheader()
         writer.writerows(rows)
 
@@ -2126,6 +2143,10 @@ def main():
         
     export_summary_to_json(final)
     export_to_csv(SUMMARY_JSON_FILE, SUMMARY_CSV_FILE)
+
+    # Mở bằng Excel không phụ thuộc dấu phân cách (VN: ";") và
+    # giữ được Ghi chú có xuống dòng trong 1 ô
+    csv_to_xlsx(SUMMARY_CSV_FILE, SUMMARY_XLSX_FILE)
 
 
 if __name__ == "__main__":

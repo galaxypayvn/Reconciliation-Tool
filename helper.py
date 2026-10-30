@@ -514,6 +514,17 @@ def convert_payment_info_to_output(payment_info: str) -> str:
             r"Rong Viet Travel",
             "Rong Viet Travel"
         ),
+        # RồngViệt
+        (
+            r"DSDT S1",
+            "DSDT S1"
+        ),
+
+        # BMI-ABBank
+        (
+            r"Bao Minh Gia Dinh\s*ABBank",
+            "BMI-ABBank"
+        ),
     ]
 
     for pattern, output_name in merchant_patterns:
@@ -662,6 +673,22 @@ def convert_payment_info_to_output(payment_info: str) -> str:
         date_part,
         flags=re.IGNORECASE
     )
+
+    # ==========================================================
+    # 10.1. Merchant có "QR Code" phía trước: thêm (QR) sau ngày chưa có tag
+    #
+    # QR Code VIETJET Kiosk N09/06/2026 va N11/06/2026
+    # -> VIETJET Kiosk N09/06/2026(QR);N11/06/2026(QR)  (";" ở bước 11)
+    #
+    # QR Code Vikkafe N01/10/2026 -> Vikkafe N01/10/2026(QR)
+    # QR Code HDB VIETJET N01/10/2026 -> VIETJET N01/10/2026(QR)
+    # ==========================================================
+    if re.search(r"QR\s*Code", text[:merchant_match.start()], re.IGNORECASE):
+        date_part = re.sub(
+            r"(N\d{1,2}(?:-\d{1,2})?/\d{1,2}/\d{4})(?!\d)(?!\s*\()",
+            r"\1(QR)",
+            date_part
+        )
 
     # ==========================================================
     # 11. Xử lý "va" giữa các transaction
@@ -834,6 +861,7 @@ def csv_to_xlsx(input_file, output_file=None):
         "Balance",
         "Số tiền (Bank)",
         "Số tiền (Payment)",
+        "Tổng số tiền",
     }
 
     # ============================================================
@@ -922,7 +950,12 @@ def csv_to_xlsx(input_file, output_file=None):
                         if date_value:
 
                             cell.value = date_value
-                            cell.number_format = "dd/mm/yyyy"
+
+                            # Giữ giờ nếu có (vd Ngày giao dịch gốc 01/10/2026 23:34:36)
+                            if date_value.time() != datetime.min.time():
+                                cell.number_format = "dd/mm/yyyy hh:mm:ss"
+                            else:
+                                cell.number_format = "dd/mm/yyyy"
 
                         else:
                             cell.value = value

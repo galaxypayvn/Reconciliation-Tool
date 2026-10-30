@@ -10,8 +10,9 @@ from convert_data_to_json import FILE_PREFIX, WALLET_FILE_PREFIX, WALLET_NEW_FIL
 from helper import (extract_bvbank_merchant, extract_hdbank_merchant, get_date_range_from_months_match,
     get_posting_date_minus_1, convert_payment_info_to_output, normalize_year, csv_to_xlsx, 
     parse_date_from_filename, parse_posting_date_from_filename, normalize_posting_date)
+from get_data_4 import load_summary_rows
 # from trio import Path
-INPUT_FILE = "csv_recon_report/recon_summary.csv"
+INPUT_FILE = "csv_recon_report/recon_summary.json"
 OUTPUT_FILE = "csv_recon_report/upload_file.csv"
 
 
@@ -682,6 +683,9 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
         "VJ WEB LATER": "VIETJET",
         "VJ WEB SKYSHOP": "VIETJET",
         "VJ KIOSK": "VIETJET",
+        "QR CODE VIETJET SKYSHOP": "VIETJET",
+        "QR CODE VIETJET KIOSK": "VIETJET",
+        "QR CODE HDB VIETJET": "VIETJET",
         "SKYFI": "SKYFI",
         "SKY JOY": "GJoy",
         "GALAXY PAY": "GPAY",
@@ -705,6 +709,8 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
         "MENAS STORE": "Menas",
         "SMILE LIVING": "SML",
         "BAO MINH GIA DINH": "BMGĐ",
+        "BAO MINH GIA DINHABBANK": "BMGĐ",
+        "QR CODE BAO MINH GIA DINHABBANK": "BMGĐ",
         "TONG CONG TY BAO MINH": "BẢO MINH",
     }
     merchant_name_map = {
@@ -1026,10 +1032,14 @@ def build_title_wallet(
                     return "Napas-Nạp tiền TK Ví"
                 elif recon_result == "MISS_GPAY":
                     return "Napas-Lệch Nạp Ví (ĐT)"
-                elif "xử lý" in note_lower or recon_result == "PARTNER_MORE":
-                    return "Napas-XLLệch Nạp tiền Ví"
+                elif recon_result == "PARTNER_MORE":
+                    if "xử lý" in note_lower:
+                        return "Napas-XLLệch Nạp tiền Ví"
+                    elif "hoàn tiền" in note_lower:
+                        return "Napas-HLệch Nạp Ví (ĐT)"
+                
 
-                return "Napas-HLệch Nạp Ví (ĐT)"
+                return "Napas-XLLệch Nạp tiền Ví"
 
         if payment_type == "PAYMENT":
 
@@ -1407,6 +1417,8 @@ def build_title_hdbank(
                 merchant_id = "Cổng" 
     elif "VSSS" in merchant_id:
         merchant_id = "VSSS"
+    elif "VIETJET" in merchant_id:
+        merchant_id = "VIETJET"
     else:
         merchant_name = "HDB"
     match merchant_id:
@@ -1445,6 +1457,8 @@ def build_title_hdbank(
         "06800681": "RỒNG VIỆT",
         "Truong Khai HoanRIVERSIDE": "KH-RVS",
         "Truong Khai Hoan-RIVERSIDE": "KH-RVS",
+        "Bao Minh Gia DinhABBank": "BMI-ABB",
+        "QR Code Bao Minh Gia DinhABBank": "BMI-ABB",
         "Truong Khai HoanNSG": "-NSG",
         "Menas Store": "-Menas",
         "ONAIR": "-OnAir",
@@ -1455,6 +1469,7 @@ def build_title_hdbank(
         "QR Code Vikkafe": "Vikkafe",
         "MOMO": "UPC",
         "ZALOPAY": "UPC",
+        "DSDT S1": "HURC1",
     }
 
     business = merchant_mapping.get(merchant_id, merchant_id)
@@ -1484,6 +1499,7 @@ def build_title_hdbank(
         "UPC MPGS Vietjet Air": "UPC",
         "UPC Vietjet Air": "UPC",
         "Galaxy Telecom": "UPC",
+        "DSDT S1": "UPC",
 
     }
 
@@ -1857,205 +1873,200 @@ def main():
 
     rows_out = []
 
-    with open(INPUT_FILE, "r", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
+    for row in load_summary_rows(INPUT_FILE):
 
-        stt = 1
+        file_name = row.get("File", "")
+        merchant = row.get("Đối tác", "")
+        merchant_id = row.get("Merchant ID", "")
+        payment_type = row.get("Loại giao dịch", "")
+        amount = row.get("Tổng số tiền", "0").replace(",", "")
+        origin_payment_date = row.get("Ngày giao dịch gốc", "")
+        note = row.get("Ghi chú", "")
+        recon_result = row.get("Kết quả đối soát", "")
+        posting_date = row.get("Ngày giao dịch", "").split(" ")[0]
+        try:
+            posting_date = normalize_posting_date(posting_date)
+            # if "1/8" in posting_date or "01/08" in posting_date:
+            #     print(f"[WARN] Posting date is 1/8, check file: {posting_date}")
+        except ValueError:
+            pass
+        accounting_date = posting_date
+        
+        origin_payment_date = row.get("Ngày giao dịch gốc", "").strip()
 
-        for row in reader:
+        is_after_23 = False
 
-            file_name = row.get("File", "")
-            merchant = row.get("Đối tác", "")
-            merchant_id = row.get("Merchant ID", "")
-            payment_type = row.get("Loại giao dịch", "")
-            amount = row.get("Tổng số tiền", "0").replace(",", "")
-            origin_payment_date = row.get("Ngày giao dịch gốc", "")
-            note = row.get("Ghi chú", "")
-            recon_result = row.get("Kết quả đối soát", "")
-            posting_date = row.get("Ngày giao dịch", "").split(" ")[0]
-            try:
-                posting_date = normalize_posting_date(posting_date)
-                # if "1/8" in posting_date or "01/08" in posting_date:
-                #     print(f"[WARN] Posting date is 1/8, check file: {posting_date}")
-            except ValueError:
-                pass
-            accounting_date = posting_date
-            
-            origin_payment_date = row.get("Ngày giao dịch gốc", "").strip()
+        if origin_payment_date:
+            dt = datetime.strptime(origin_payment_date, "%d/%m/%Y %H:%M:%S")
+            is_after_23 = dt.time() >= time(23, 0, 0)
 
-            is_after_23 = False
-
-            if origin_payment_date:
-                dt = datetime.strptime(origin_payment_date, "%d/%m/%Y %H:%M:%S")
-                is_after_23 = dt.time() >= time(23, 0, 0)
-
-            if "MPGS" in merchant.upper() and (is_after_23 or recon_result == "MISS_GPAY"):
-                #print(f"before plus 1 day {accounting_date}")
-                accounting_date = (
-                    datetime.strptime(posting_date, "%d/%m/%Y") + timedelta(days=1)
-                ).strftime("%d/%m/%Y")
-                #print(f"after plus 1 day {accounting_date}")   
-            try:
-                amount = float(amount)
-            except ValueError:
-                raise ValueError(
-                    f"Cannot parse amount '{amount}' in file {file_name}, row: {row}"
-                )
-
-            # ===== PARSE DATE =====
-            # posting_date = parse_date_from_filename(file_name)
-            # if not posting_date:
-            #     print("[WARN] Cannot parse date from:", file_name)
-            # YYYYMMDD cho asset value date
-            if len(posting_date) < 10:
-                # print(f"[WARN] Posting date is too short: {posting_date} in file: {file_name}")
-                posting_date = parse_date_from_filename(file_name)
-                # print(f"[INFO] Using parsed posting date: {posting_date} for file: {file_name}")
-            # posting_date_ymd = posting_date.replace("/", "")
-
-            # ===== TITLE =====
-            if "RECON_REPORT_INPUT" in file_name.upper():
-                title = build_title_upc(merchant,payment_type,merchant_id,recon_result,note)
-            elif "DAILY" in file_name.upper() or WALLET_NEW_FILE_PREFIX in file_name.upper():
-                title = build_title_wallet(merchant,payment_type,merchant_id,recon_result,note)
-            elif "HDBANK" in file_name.upper():
-                title = build_title_hdbank(merchant,payment_type,merchant_id,recon_result,note)
-            elif "SAOKE" in file_name.upper():
-                title = build_title_bvb(merchant,payment_type,merchant_id,recon_result,note)
-            else:
-                # Không fallback: tránh dùng lại title của dòng trước
-                raise ValueError(f"Unknown file type, cannot build title: {file_name}")
-            if "XLý Lệch Nạp tiền Ví" in title or "HLệch Nạp Ví (ĐT)" in title or "XLLệch Nạp tiền Ví" in title or "HLệch Rút tiền Ví" in title:
-                accounting_date = parse_posting_date_from_filename(file_name)
-            
-            # ===== DIỄN GIẢI (FIXED) =====
-            description = build_description(title, posting_date, accounting_date, merchant_id, merchant, file_name, note, payment_type)
-            if "MPGS" in merchant.upper() or merchant == "HDBANK_STATEMENT" or "HDBANK" in file_name.upper() or "SAOKE_BVBANK" in file_name.upper():
-                debit_info = build_posting_info_mpgs(title, "Nợ", merchant, merchant_id, note, payment_type, recon_result, file_name, amount)
-                credit_info = build_posting_info_mpgs(title, "Có", merchant, merchant_id, note, payment_type, recon_result, file_name, amount)
-            else:
-                debit_info = build_posting_info(title, "Nợ", merchant, merchant_id, note, payment_type, recon_result, file_name)
-                credit_info = build_posting_info(title, "Có", merchant, merchant_id, note, payment_type, recon_result, file_name)
-
-            document_type = build_document_type(
-                title,
-                debit_info,
-                credit_info,
-                merchant,
-                payment_type,
-                recon_result,
-                note
+        if "MPGS" in merchant.upper() and (is_after_23 or recon_result == "MISS_GPAY"):
+            #print(f"before plus 1 day {accounting_date}")
+            accounting_date = (
+                datetime.strptime(posting_date, "%d/%m/%Y") + timedelta(days=1)
+            ).strftime("%d/%m/%Y")
+            #print(f"after plus 1 day {accounting_date}")   
+        try:
+            amount = float(amount)
+        except ValueError:
+            raise ValueError(
+                f"Cannot parse amount '{amount}' in file {file_name}, row: {row}"
             )
-            # CREATE 2 ROWS (NỢ / CÓ)
-            # =======================================================
 
-            for dr_cr in ["Nợ", "Có"]:
-                if "MPGS" in merchant.upper() or merchant == "HDBANK_STATEMENT" or "HDBANK" in file_name.upper() or "SAOKE_BVBANK" in file_name.upper():
-                    posting_info = build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result, file_name, amount)
-                else:
-                    posting_info = build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result, file_name)
+        # ===== PARSE DATE =====
+        # posting_date = parse_date_from_filename(file_name)
+        # if not posting_date:
+        #     print("[WARN] Cannot parse date from:", file_name)
+        # YYYYMMDD cho asset value date
+        if len(posting_date) < 10:
+            # print(f"[WARN] Posting date is too short: {posting_date} in file: {file_name}")
+            posting_date = parse_date_from_filename(file_name)
+            # print(f"[INFO] Using parsed posting date: {posting_date} for file: {file_name}")
+        # posting_date_ymd = posting_date.replace("/", "")
+
+        # ===== TITLE =====
+        if "RECON_REPORT_INPUT" in file_name.upper():
+            title = build_title_upc(merchant,payment_type,merchant_id,recon_result,note)
+        elif "DAILY" in file_name.upper() or WALLET_NEW_FILE_PREFIX in file_name.upper():
+            title = build_title_wallet(merchant,payment_type,merchant_id,recon_result,note)
+        elif "HDBANK" in file_name.upper():
+            title = build_title_hdbank(merchant,payment_type,merchant_id,recon_result,note)
+        elif "SAOKE" in file_name.upper():
+            title = build_title_bvb(merchant,payment_type,merchant_id,recon_result,note)
+        else:
+            # Không fallback: tránh dùng lại title của dòng trước
+            raise ValueError(f"Unknown file type, cannot build title: {file_name}")
+        if "XLý Lệch Nạp tiền Ví" in title or "HLệch Nạp Ví (ĐT)" in title or "XLLệch Nạp tiền Ví" in title or "HLệch Rút tiền Ví" in title:
+            accounting_date = parse_posting_date_from_filename(file_name)
+        
+        # ===== DIỄN GIẢI (FIXED) =====
+        description = build_description(title, posting_date, accounting_date, merchant_id, merchant, file_name, note, payment_type)
+        if "MPGS" in merchant.upper() or merchant == "HDBANK_STATEMENT" or "HDBANK" in file_name.upper() or "SAOKE_BVBANK" in file_name.upper():
+            debit_info = build_posting_info_mpgs(title, "Nợ", merchant, merchant_id, note, payment_type, recon_result, file_name, amount)
+            credit_info = build_posting_info_mpgs(title, "Có", merchant, merchant_id, note, payment_type, recon_result, file_name, amount)
+        else:
+            debit_info = build_posting_info(title, "Nợ", merchant, merchant_id, note, payment_type, recon_result, file_name)
+            credit_info = build_posting_info(title, "Có", merchant, merchant_id, note, payment_type, recon_result, file_name)
+
+        document_type = build_document_type(
+            title,
+            debit_info,
+            credit_info,
+            merchant,
+            payment_type,
+            recon_result,
+            note
+        )
+        # CREATE 2 ROWS (NỢ / CÓ)
+        # =======================================================
+
+        for dr_cr in ["Nợ", "Có"]:
+            if "MPGS" in merchant.upper() or merchant == "HDBANK_STATEMENT" or "HDBANK" in file_name.upper() or "SAOKE_BVBANK" in file_name.upper():
+                posting_info = build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result, file_name, amount)
+            else:
+                posting_info = build_posting_info(title, dr_cr, merchant, merchant_id, note, payment_type, recon_result, file_name)
+            
+            if title == "Lãi tiền gửi" and dr_cr == "Có":
+                dummy = "DUMMY"
+            else:
+                dummy = ""
+            
+            if posting_info["account"].startswith("63") or posting_info["account"].startswith("644"):
+                cost_center = "8001601000"
+            else:
+                cost_center = ""
+            
+            
+            if amount == 0 or payment_type == "PAYMENT_INTERNAL" or "BVB-Cắt tiền" in title:
+                print(f"[WARN] Amount is 0 or PAYMENT_INTERNAL, skipping row: {row}")
+                continue
+            else:
+                rows_out.append({
+                    "STT": "",
+
+                    # ===== FIXED DATES =====
+                    "Ngày chứng từ": accounting_date,
+                    "Ngày hạch toán": accounting_date,
+                    "Period (Kì hạch toán)": "",
+
+                    "Tiêu đề chứng từ": title,
+                    "Mẫu hóa đơn": "",
+                    "Số hoá đơn (Reference)": "",
+                    "Loại chứng từ": document_type,
+                    "Mã công ty": "1080",
+
+                    "Đ.vị tiền tệ": DEFAULT_CURRENCY,
+                    "Ngày lấy tỉ giá trong hệ thống": "",
+
+                    "Reference Key 1 HD (Không cần điền)": "",
+                    "Reference Key 2 HD (Không cần điền)": "",
+
+                    "Nợ/Có": dr_cr,
+                    "Tài khoản": posting_info["account"],
+                    "Mã BP": posting_info["business_unit"],
+                    "Mã tài sản": "",
+                    "Transaction type": "",
+
+                    "Asset value date (Để định dạng YYYYMMDD)": "",
+
+                    "Special GL indicator": "",
+
+                    "Số tiền": f"{amount:,.0f}",
+
+                    "Số tiền quy đổi (Khi currency là VND thì bỏ trống cột này, KHÔNG ĐƯỢC ĐỂ SỐ 0)": "",
+
+                    "Base Amount": "",
+                    "Thuế suất": "",
+                    "Số tiền thuế": "",
+                    "Số tiền thuế quy đổi (Khi currency là VND thì bỏ trống cột này, KHÔNG ĐƯỢC ĐỂ SỐ 0)": "",
+
+                    "Chi cục thuế (Không cần điền)": "",
+                    "Chi nhánh (Không cần điền)": "",
+
+                    "TT Chi phí (Cost center)": cost_center,
+                    "TT lợi nhuận (Profit center)": DEFAULT_PROFIT_CENTER,
+
+                    "Payment cur.": "",
+                    "Pmnt/c amnt": "",
+
+                    # ===== FIXED DIỄN GIẢI =====
+                    "Diễn giải": description,
+
+                    "Nội dung gán (Không cần điền)": "",
+                    "MSN": "",
+                    "Serial Number": "",
+
+                    "Order (Nhập lessor cho tài khoản 335* hoặc nhập mã chương trình sự kiện cho TK CP)": "",
+                    "Máy bay (Nhập cho TK Doanh thu)": "",
+                    "Chặng bay (Nhập cho TK Doanh thu)": dummy,
+
+                    "Điều khoản thanh toán": dummy,
+                    "Ngày tính nợ": "",
+                    "Khóa thanh toán": "",
+                    "Phương thức thanh toán": "",
+                    "Mã tài khoản ngân hàng giao dịch": "",
+                    "Đánh dấu ghi âm": "",
+
+                    "Reference Key 1 Line (Không cần điền)": "",
+                    "Reference Key 2 Line (Với một số loại chứng từ như KA thì điền Profit Center vào Ref key 2)": DEFAULT_PROFIT_CENTER,
+                    "Reference Key 3 Line (Không cần điền)": "",
+
+                    "Tên (Khai báo hóa đơn cho NCC vãng lai)": "",
+                    "Địa chỉ (Khai báo hóa đơn cho NCC vãng lai)": "",
+                    "Tỉnh/ thành phố (Khai báo hóa đơn cho NCC vãng lai)": "",
+                    "Country(Khai báo hóa đơn cho NCC vãng lai/ Payee)": "",
+                    "Mã số thuế (Khai báo hóa đơn cho NCC vãng lai)": "",
+                    "Bank country (Khai báo hóa đơn cho NCC vãng lai)": "",
+                    "Bank key (Khai báo hóa đơn cho NCC vãng lai)": "",
+                    "Bank account (Khai báo hóa đơn cho NCC vãng lai)": "",
+                    "CN ngân hàng (Khai báo hóa đơn cho NCC vãng lai)": "",
+                    "Type of Bussiness (Khai báo hóa đơn cho NCC vãng lai)": "",
+
+                    "Reference key 4": "",
+                    "Purchasing Doc.": "",
+                    "Trading.Partner ( Phục vụ hợp nhất BCTC)": ""
+                })
                 
-                if title == "Lãi tiền gửi" and dr_cr == "Có":
-                    dummy = "DUMMY"
-                else:
-                    dummy = ""
-                
-                if posting_info["account"].startswith("63") or posting_info["account"].startswith("644"):
-                    cost_center = "8001601000"
-                else:
-                    cost_center = ""
-                
-                
-                if amount == 0 or payment_type == "PAYMENT_INTERNAL" or "BVB-Cắt tiền" in title:
-                    print(f"[WARN] Amount is 0 or PAYMENT_INTERNAL, skipping row: {row}")
-                    continue
-                else:
-                    rows_out.append({
-                        "STT": "",
-    
-                        # ===== FIXED DATES =====
-                        "Ngày chứng từ": accounting_date,
-                        "Ngày hạch toán": accounting_date,
-                        "Period (Kì hạch toán)": "",
-
-                        "Tiêu đề chứng từ": title,
-                        "Mẫu hóa đơn": "",
-                        "Số hoá đơn (Reference)": "",
-                        "Loại chứng từ": document_type,
-                        "Mã công ty": "1080",
-
-                        "Đ.vị tiền tệ": DEFAULT_CURRENCY,
-                        "Ngày lấy tỉ giá trong hệ thống": "",
-
-                        "Reference Key 1 HD (Không cần điền)": "",
-                        "Reference Key 2 HD (Không cần điền)": "",
-
-                        "Nợ/Có": dr_cr,
-                        "Tài khoản": posting_info["account"],
-                        "Mã BP": posting_info["business_unit"],
-                        "Mã tài sản": "",
-                        "Transaction type": "",
-
-                        "Asset value date (Để định dạng YYYYMMDD)": "",
-
-                        "Special GL indicator": "",
-
-                        "Số tiền": f"{amount:,.0f}",
-
-                        "Số tiền quy đổi (Khi currency là VND thì bỏ trống cột này, KHÔNG ĐƯỢC ĐỂ SỐ 0)": "",
-
-                        "Base Amount": "",
-                        "Thuế suất": "",
-                        "Số tiền thuế": "",
-                        "Số tiền thuế quy đổi (Khi currency là VND thì bỏ trống cột này, KHÔNG ĐƯỢC ĐỂ SỐ 0)": "",
-
-                        "Chi cục thuế (Không cần điền)": "",
-                        "Chi nhánh (Không cần điền)": "",
-
-                        "TT Chi phí (Cost center)": cost_center,
-                        "TT lợi nhuận (Profit center)": DEFAULT_PROFIT_CENTER,
-
-                        "Payment cur.": "",
-                        "Pmnt/c amnt": "",
-
-                        # ===== FIXED DIỄN GIẢI =====
-                        "Diễn giải": description,
-
-                        "Nội dung gán (Không cần điền)": "",
-                        "MSN": "",
-                        "Serial Number": "",
-
-                        "Order (Nhập lessor cho tài khoản 335* hoặc nhập mã chương trình sự kiện cho TK CP)": "",
-                        "Máy bay (Nhập cho TK Doanh thu)": "",
-                        "Chặng bay (Nhập cho TK Doanh thu)": dummy,
-
-                        "Điều khoản thanh toán": dummy,
-                        "Ngày tính nợ": "",
-                        "Khóa thanh toán": "",
-                        "Phương thức thanh toán": "",
-                        "Mã tài khoản ngân hàng giao dịch": "",
-                        "Đánh dấu ghi âm": "",
-
-                        "Reference Key 1 Line (Không cần điền)": "",
-                        "Reference Key 2 Line (Với một số loại chứng từ như KA thì điền Profit Center vào Ref key 2)": DEFAULT_PROFIT_CENTER,
-                        "Reference Key 3 Line (Không cần điền)": "",
-
-                        "Tên (Khai báo hóa đơn cho NCC vãng lai)": "",
-                        "Địa chỉ (Khai báo hóa đơn cho NCC vãng lai)": "",
-                        "Tỉnh/ thành phố (Khai báo hóa đơn cho NCC vãng lai)": "",
-                        "Country(Khai báo hóa đơn cho NCC vãng lai/ Payee)": "",
-                        "Mã số thuế (Khai báo hóa đơn cho NCC vãng lai)": "",
-                        "Bank country (Khai báo hóa đơn cho NCC vãng lai)": "",
-                        "Bank key (Khai báo hóa đơn cho NCC vãng lai)": "",
-                        "Bank account (Khai báo hóa đơn cho NCC vãng lai)": "",
-                        "CN ngân hàng (Khai báo hóa đơn cho NCC vãng lai)": "",
-                        "Type of Bussiness (Khai báo hóa đơn cho NCC vãng lai)": "",
-
-                        "Reference key 4": "",
-                        "Purchasing Doc.": "",
-                        "Trading.Partner ( Phục vụ hợp nhất BCTC)": ""
-                    })
-                    
 
     if not rows_out:
         raise ValueError(f"No rows to export from {INPUT_FILE}")

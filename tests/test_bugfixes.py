@@ -7,6 +7,7 @@ Usage:
 """
 
 import csv
+import json
 import sys
 import tempfile
 import unittest
@@ -303,31 +304,48 @@ class ParseCsvFileTest(unittest.TestCase):
             self.assertTrue(csv_file.exists())
 
 
-SUMMARY_HEADER = [
-    "File", "Ngày giao dịch", "Đối tác", "Merchant ID", "Loại giao dịch",
-    "Kết quả đối soát", "Tổng số tiền", "Số lượng giao dịch", "Loại tiền tệ",
-    "Ngày giao dịch gốc", "Ghi chú", "Số tham chiếu",
-]
+def summary_row(file_name, posting_date, amount=100_000):
+    return file_name, posting_date, amount
 
 
-def summary_row(file_name, posting_date, amount="100,000"):
-    return [
-        file_name, posting_date, "MOMO", "VJ APP TICKET", "PAYMENT",
-        "MATCH_SUCCESS", amount, "1", "VND", "", "", "",
-    ]
+def build_summary_json(rows):
+    # Cùng cấu trúc recon_summary.json do get_data_4.process_file_data sinh ra:
+    # file -> merchant -> merchant_id -> payment_type -> posting_date -> recon_result -> [info]
+    data = {}
+
+    for file_name, posting_date, amount in rows:
+        (
+            data.setdefault(file_name, {})
+            .setdefault("MOMO", {})
+            .setdefault("VJ APP TICKET", {})
+            .setdefault("PAYMENT", {})
+            .setdefault(posting_date, {})
+            .setdefault("MATCH_SUCCESS", [])
+            .append({
+                "total_amount": amount,
+                "txn_count": 1,
+                "Ngày giao dịch": posting_date,
+                "Loại tiền tệ": ["VND"],
+                "Ngày giao dịch gốc": "",
+                "Ghi chú": "",
+                "Số tham chiếu": "",
+            })
+        )
+
+    return data
 
 
 class ExportMainTest(unittest.TestCase):
 
     def run_export(self, rows):
         with tempfile.TemporaryDirectory() as tmp:
-            input_file = Path(tmp) / "recon_summary.csv"
+            input_file = Path(tmp) / "recon_summary.json"
             output_file = Path(tmp) / "upload_file.csv"
 
-            with open(input_file, "w", newline="", encoding="utf-8-sig") as f:
-                writer = csv.writer(f)
-                writer.writerow(SUMMARY_HEADER)
-                writer.writerows(rows)
+            input_file.write_text(
+                json.dumps(build_summary_json(rows), ensure_ascii=False),
+                encoding="utf-8",
+            )
 
             with mock.patch.object(export_upload_file_1, "INPUT_FILE", str(input_file)), \
                     mock.patch.object(export_upload_file_1, "OUTPUT_FILE", str(output_file)), \

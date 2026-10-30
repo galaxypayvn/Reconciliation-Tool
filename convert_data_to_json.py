@@ -183,6 +183,33 @@ def convert_xlsx_to_csv(source_folder, file_prefix):
             )
 
 
+# Các cột dùng để nhận diện dòng header của từng loại file
+HEADER_COLUMNS = {
+    "DS_DAILY": ("TT", "Ngày giao dịch", "Mã giao dịch GPC (Bank)"),
+    "RECON_REPORT_INPUT": ("TT", "Ngày giao dịch", "Transaction Id", "Kết quả đối soát"),
+    "RECON_REPORT_WALLET": ("TT", "Transaction Date", "Reconciliation Status"),
+    "HDBANK": ("Số tham chiếu", "Thông tin giao dịch"),
+    "BVBANK": ("SỐ GIAO DỊCH (Reference Number)", "DIỄN GIẢI (Narrative)"),
+}
+
+
+def find_header_index(all_rows, required, file_name) -> int:
+    """
+    Quét từ trên xuống, trả về index của dòng đầu tiên chứa đủ các cột required.
+    """
+
+    for index, row in enumerate(all_rows):
+        # Gộp khoảng trắng / xuống dòng trong ô (vd "SỐ GIAO DỊCH\n(Reference Number)")
+        cells = {" ".join(str(col).split()) for col in row}
+
+        if all(col in cells for col in required):
+            return index
+
+    raise ValueError(
+        f"Cannot find header row with columns {list(required)}: {file_name}"
+    )
+
+
 def parse_csv_file(csv_file: Path) -> List[Dict[str, Any]]:
     """
     Parse CSV using first row as header.
@@ -202,24 +229,24 @@ def parse_csv_file(csv_file: Path) -> List[Dict[str, Any]]:
 
         all_rows = list(reader)
         
-        # Determine header row
+        # Determine header row: dòng header không cố định tuỳ file
+        # -> lấy dòng đầu tiên có đủ các cột nhận diện của loại file
         if "DS_Daily" in csv_file.stem:
-            header_index = 2
+            required = HEADER_COLUMNS["DS_DAILY"]
         elif "RECON_REPORT_INPUT" in csv_file.stem.upper():
-            header_index = 0
+            required = HEADER_COLUMNS["RECON_REPORT_INPUT"]
         elif "RECON_REPORT_WALLET" in csv_file.stem.upper():
-            header_index = 0
+            required = HEADER_COLUMNS["RECON_REPORT_WALLET"]
         elif "HDBANK_068704070165977" in csv_file.stem.upper() and "PrintPage" in csv_file.stem:
-            header_index = 14
+            required = HEADER_COLUMNS["HDBANK"]
         elif "SAOKE_BVBank_0697041105669" in csv_file.stem:
-            header_index = 15
+            required = HEADER_COLUMNS["BVBANK"]
         else:
             raise ValueError(
                 f"Unknown file type, cannot determine header row: {csv_file.name}"
             )
 
-        if len(all_rows) <= header_index:
-            return []
+        header_index = find_header_index(all_rows, required, csv_file.name)
 
         headers = [
         str(col).strip() if str(col).strip() else f"col{i}"
