@@ -8,13 +8,16 @@ import shutil
 from typing import Dict, Any, List
 import pandas as pd
 
-INPUT_FOLDER = "./DAILY_RECON/UPC"
+INPUT_FOLDER = "DAILY_RECON/UPC"
 FILE_PREFIX = "RECON_REPORT_INPUT"
-WALLET_INPUT_FOLDER = "./DAILY_RECON/WALLET"
+WALLET_INPUT_FOLDER = "DAILY_RECON/WALLET"
 WALLET_FILE_PREFIX = "DS_Daily_gui"
-CSV_FOLDER = "./csv_recon_report"
+WALLET_NEW_FILE_PREFIX = "RECON_REPORT_WALLET"
+WALLET_NEW_FILE_PREFIX_INPUT = "RECON_REPORT_WALLET_INPUT"
+WALLET_NEW_FILE_PREFIX_OUTPUT = "RECON_REPORT_WALLET_OUTPUT"
+CSV_FOLDER = "csv_recon_report"
 OUTPUT_JSON = f"{CSV_FOLDER}/recon_export.json"
-BANK_STATEMENT_FOLDER = "./DAILY_RECON/STATEMENT"
+BANK_STATEMENT_FOLDER = "DAILY_RECON/STATEMENT"
 BANK_STATEMENT_FILE_PREFIX = "BANK"
 
 def convert_xls_to_csv(source_folder, file_prefix, output_folder):
@@ -87,6 +90,7 @@ def convert_xls_to_csv(source_folder, file_prefix, output_folder):
                     f"{xls_file.name} / {sheet_name}"
                     f" -> {csv_file.name}"
                 )
+                
 
         except Exception as e:
             print(
@@ -179,6 +183,33 @@ def convert_xlsx_to_csv(source_folder, file_prefix):
             )
 
 
+# Các cột dùng để nhận diện dòng header của từng loại file
+HEADER_COLUMNS = {
+    "DS_DAILY": ("TT", "Ngày giao dịch", "Mã giao dịch GPC (Bank)"),
+    "RECON_REPORT_INPUT": ("TT", "Ngày giao dịch", "Transaction Id", "Kết quả đối soát"),
+    "RECON_REPORT_WALLET": ("TT", "Transaction Date", "Reconciliation Status"),
+    "HDBANK": ("Số tham chiếu", "Thông tin giao dịch"),
+    "BVBANK": ("SỐ GIAO DỊCH (Reference Number)", "DIỄN GIẢI (Narrative)"),
+}
+
+
+def find_header_index(all_rows, required, file_name) -> int:
+    """
+    Quét từ trên xuống, trả về index của dòng đầu tiên chứa đủ các cột required.
+    """
+
+    for index, row in enumerate(all_rows):
+        # Gộp khoảng trắng / xuống dòng trong ô (vd "SỐ GIAO DỊCH\n(Reference Number)")
+        cells = {" ".join(str(col).split()) for col in row}
+
+        if all(col in cells for col in required):
+            return index
+
+    raise ValueError(
+        f"Cannot find header row with columns {list(required)}: {file_name}"
+    )
+
+
 def parse_csv_file(csv_file: Path) -> List[Dict[str, Any]]:
     """
     Parse CSV using first row as header.
@@ -198,17 +229,24 @@ def parse_csv_file(csv_file: Path) -> List[Dict[str, Any]]:
 
         all_rows = list(reader)
         
-        # Determine header row
+        # Determine header row: dòng header không cố định tuỳ file
+        # -> lấy dòng đầu tiên có đủ các cột nhận diện của loại file
         if "DS_Daily" in csv_file.stem:
-            header_index = 2
+            required = HEADER_COLUMNS["DS_DAILY"]
         elif "RECON_REPORT_INPUT" in csv_file.stem.upper():
-            header_index = 0
+            required = HEADER_COLUMNS["RECON_REPORT_INPUT"]
+        elif "RECON_REPORT_WALLET" in csv_file.stem.upper():
+            required = HEADER_COLUMNS["RECON_REPORT_WALLET"]
         elif "HDBANK_068704070165977" in csv_file.stem.upper() and "PrintPage" in csv_file.stem:
-            header_index = 14
+            required = HEADER_COLUMNS["HDBANK"]
         elif "SAOKE_BVBank_0697041105669" in csv_file.stem:
-            header_index = 15
-        if not all_rows:
-            return []
+            required = HEADER_COLUMNS["BVBANK"]
+        else:
+            raise ValueError(
+                f"Unknown file type, cannot determine header row: {csv_file.name}"
+            )
+
+        header_index = find_header_index(all_rows, required, csv_file.name)
 
         headers = [
         str(col).strip() if str(col).strip() else f"col{i}"
@@ -245,6 +283,7 @@ def scan_csv_folder() -> Dict[str, Any]:
     folder = Path(CSV_FOLDER)
 
     result = {}
+    failed_files = []
 
     # csv_files = sorted(folder.glob("*.csv"))
     keywords = (
@@ -263,6 +302,14 @@ def scan_csv_folder() -> Dict[str, Any]:
 
     for csv_file in csv_files:
 
+        # Sao kê HDBANK chỉ dùng sheet PrintPage, các sheet khác (Sheet2, Sheet3...) bỏ qua
+        if (
+            "HDBANK_068704070165977" in csv_file.stem.upper()
+            and "PrintPage" not in csv_file.stem
+        ):
+            print(f"[SKIP] Unused HDBANK sheet: {csv_file.name}")
+            continue
+
         try:
 
             data = parse_csv_file(csv_file)
@@ -280,14 +327,18 @@ def scan_csv_folder() -> Dict[str, Any]:
 
         except Exception as exc:
 
-            result[csv_file.name] = {
-                "__error__": str(exc)
-            }
+            failed_files.append(f"{csv_file.name}: {exc}")
 
             print(
                 f"[ERROR] Failed "
                 f"{csv_file.name}: {exc}"
             )
+
+    # Dừng pipeline thay vì bỏ qua file lỗi (giữ lại CSV để kiểm tra)
+    if failed_files:
+        raise RuntimeError(
+            "Cannot parse CSV files:\n  " + "\n  ".join(failed_files)
+        )
 
     return result
 
@@ -332,6 +383,7 @@ def main():
 
     convert_xlsx_to_csv(Path(INPUT_FOLDER), FILE_PREFIX)
     convert_xlsx_to_csv(Path(WALLET_INPUT_FOLDER), WALLET_FILE_PREFIX)
+    convert_xlsx_to_csv(Path(WALLET_INPUT_FOLDER), WALLET_NEW_FILE_PREFIX)
     convert_xls_to_csv(Path(BANK_STATEMENT_FOLDER), BANK_STATEMENT_FILE_PREFIX, CSV_FOLDER)
     
     print("\n" + "=" * 80)
