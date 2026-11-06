@@ -1,1 +1,13 @@
+
+/csv_recon_report/
+/DAILY_RECON/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# macOS
 .DS_Store
+
+# Golden test snapshots (chứa dữ liệu giao dịch thật)
+/tests/golden_data/
