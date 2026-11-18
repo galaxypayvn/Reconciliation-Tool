@@ -11,6 +11,7 @@ from helper import (extract_bvbank_merchant, extract_hdbank_merchant, get_date_r
     get_posting_date_minus_1, convert_payment_info_to_output, normalize_year, csv_to_xlsx, 
     parse_date_from_filename, parse_posting_date_from_filename, normalize_posting_date)
 from get_data_4 import load_summary_rows
+from business_unit import BUSINESS_UNIT
 # from trio import Path
 INPUT_FILE = "csv_recon_report/recon_summary.json"
 OUTPUT_FILE = "csv_recon_report/upload_file.csv"
@@ -19,78 +20,7 @@ OUTPUT_FILE = "csv_recon_report/upload_file.csv"
 DEFAULT_CURRENCY = "VND"
 DEFAULT_PROFIT_CENTER = "10800001"
 
-BUSINESS_UNIT = {
-        # Merchant (Partner)
-        "VIETJET": "1010",
-        "UPC VIETJET AIR": "1010",
-        "UPC MPGS VIETJET AIR": "1010",
-        "VIETJET KIOSK": "1010",
-        "VIETJET SKYSHOP": "1010",
-        "GALAXY PAY": "1080",
-        "GPAY": "1080",
-        "SKYFI": "1000003120",
-        "GALAXY TELECOM": "1000003120",
-        "GJOY": "0037888888",
-        "GALAXY JOY": "0037888888",
-        "SKY JOY": "0037888888",
-        "SKYJOY": "0037888888",
-        "RỒNG VIỆT": "0037486431",
-        "RONG VIET": "0037486431",
-        "HDI": "1000000860",
-        "HDI PORTAL": "1000000860",
-        "ONAIR": "1000002978",
-        "VSSS": "1000002177",
-        "VSSS VICTORIA INTERNATIONAL SCHOOL": "1000002177",
-        "VSSS (VICTORIA INTERNATIONAL SCHOOL)": "1000002177",
-        "VSSS VICTORIA SCHOOL": "1000002177",
-        "TRUONG KHAI HOAN-NAM SG": "1000003029",
-        "KHẢI HOÀN-NSG": "1000003029",
-        "TRUONG KHAI HOANNSG": "1000003029",
-        "KHOAN-RIVERSIDE": "1000003028",
-        "TRUONG KHAI HOAN-RIVERSIDE": "1000003028",
-        "TRUONG KHAI HOANRIVERSIDE": "1000003028",
-        "SBH": "1000002630",
-        "UPC SBH": "1000002630",
-        "VINAPP": "1000002977",
-        "VINCLUB": "1000002977",
-        "VIKKAFE": "1000003587",
-        "QR CODE VIKKAFE": "1000003587",
-        "MENAS": "1000000265",
 
-        # Đối tác
-        "MOMO": "0037385423",
-        "ZALOPAY": "0037482684",
-        "NAPAS": "1000002622",
-        "BVB": "1000002626",
-        "BVBANK": "1000002626",
-        "VCCB": "1000002626",
-        "VNPAY": "0037405944",
-        "IMEDIA": "1000002623",
-        "HDB": "0037360001",
-        "HDB-VA": "0037360001",
-        "HDBANK": "0037360001",
-        "HDBANK_STATEMENT": "0037360001",
-        "BIDV": "0037360001",
-        "MPGS": "0037360001",
-        "GIAC MO BAY RE": "0037483314",
-        "GD GIAC MO BAY RE": "0037483314",
-        "SML": "1000002847",
-        "MAILAND": "1000003027",
-        "BMGĐ": "1000000932",
-        "BMI - ABBANK": "1000000932",
-        "BẢO MINH": "1000003702",
-        "GOTRUST": "1000003386",
-        "VNS": "1000002624",
-        "HURC1": "1000003997",
-    }
-
-
-
-
-
-
-
-    
 
 def mapping_merchant(merchant, merchant_id):
     merchant_name_map = {
@@ -117,7 +47,7 @@ def mapping_merchant(merchant, merchant_id):
         "VNPAY": "VNPay"
   
     }
-
+    
     merchant_name = merchant_name_map.get(
         merchant,
         merchant.title()
@@ -713,6 +643,7 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
         "BAO MINH GIA DINHABBANK": "BMGĐ",
         "QR CODE BAO MINH GIA DINHABBANK": "BMGĐ",
         "TONG CONG TY BAO MINH": "BẢO MINH",
+        "NEN TANG GIAO THONG TAP TRUNG": "GOTRUST",
     }
     merchant_name_map = {
         "VCCB": "BVB",
@@ -840,9 +771,13 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
             account = "3388403100" if dr_cr == "Nợ" else account_hd_bvb
             business_unit = merchant_bu if dr_cr == "Nợ" else ""
         elif "Phát sinh nợ" in note:
-            account = "3311401000" if dr_cr == "Nợ" else account_hd_bvb
-            
-            business_unit = partner_bu if dr_cr == "Nợ" else ""
+            if payment_type == 'REFUND':
+                account = "1388404200" if dr_cr == "Nợ" else account_hd_bvb
+                business_unit = "0037360001" if dr_cr == "Nợ" else ""
+                
+            else:
+                account = "3311401000" if dr_cr == "Nợ" else account_hd_bvb
+                business_unit = partner_bu if dr_cr == "Nợ" else ""
         
             
     
@@ -1269,7 +1204,8 @@ def build_title_upc(
         "VINCLUB": "VinApp",
         "Galaxy Pay": "test",
         "MENAS STORE": "Menas",
-        "GIAC MO BAY RE": "GMBR"
+        "GIAC MO BAY RE": "GMBR",
+        "NEN TANG GIAO THONG TAP TRUNG": "GOTRUST",
     }
 
     business = merchant_mapping.get(merchant_id, merchant_id)
@@ -1339,7 +1275,7 @@ def build_title_upc(
             return f"{merchant_name}-GD{channel_text} {business}"
 
         # Payment + MissGpay
-        if recon_result == "MISS_GPAY":
+        elif recon_result == "MISS_GPAY":
 
             # Miss nhưng lệch ngày => như MATCH
             if "lệch ngày" in note_lower:
@@ -1532,6 +1468,8 @@ def build_title_hdbank(
         return f"Lãi tiền gửi"
     elif payment_type == "PAYMENT_INTERNAL":
         return f"Chuyển tiền nội bộ {note}"
+    elif payment_type == "REFUND" and "hoan tien cho" in note.lower():
+        return f"HDB-Hoàn GD QR"
     return f"{merchant_name}-{payment_type} {merchant_id} {recon_result} {note}"
 
 def build_title_bvb(
@@ -1901,7 +1839,7 @@ def main():
             dt = datetime.strptime(origin_payment_date, "%d/%m/%Y %H:%M:%S")
             is_after_23 = dt.time() >= time(23, 0, 0)
 
-        if "MPGS" in merchant.upper() and (is_after_23 or recon_result == "MISS_GPAY"):
+        if "MPGS" in merchant.upper() and (is_after_23 or (recon_result == "MISS_GPAY" and "lệch ngày" in note.lower() )):
             #print(f"before plus 1 day {accounting_date}")
             accounting_date = (
                 datetime.strptime(posting_date, "%d/%m/%Y") + timedelta(days=1)
