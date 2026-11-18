@@ -40,6 +40,7 @@ SCRIPTS = (
     "get_data_4.py",
     "export_upload_file_1.py",
     "helper.py",
+    "business_unit.py",
 )
 
 # Thư mục đích trong DAILY_RECON theo prefix tên file

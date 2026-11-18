@@ -275,7 +275,10 @@ def process_file_data(file_name, rows):
             merchant_id = row.get(
                 MERCHANT_ID_KEY, ""
             ).strip()
-
+            if merchant_name == "HDB_MPGS":
+                merchant_id = row.get(
+                "ĐVCNTT", ""
+                ).strip()
             payment_type = row.get(
                 PAYMENT_TYPE_KEY, ""
             ).strip()
@@ -1163,9 +1166,12 @@ def process_file_data(file_name, rows):
                 ""
             ).strip()
             
-            
-            
-            
+            credit_amount = parse_amount(
+                    row.get("Phát sinh nợ", 0)
+                )
+            debit_amount = parse_amount(
+                    row.get("Phát sinh có", 0)
+                )
             # ========================================================
             # A. GALAXY PAY TRANSFER
             # ========================================================
@@ -1248,7 +1254,163 @@ def process_file_data(file_name, rows):
                 # sẽ xử lý ở bước tiếp theo
 
                 continue
+            
+            elif ("kh hoan tra napas" in payment_info.lower() ):
 
+                merchant_id = extract_hdbank_merchant(
+                    payment_info
+                )
+
+                amount = parse_amount(
+                    row.get("Phát sinh nợ", 0)
+                )
+
+                if amount == 0:
+                    continue
+
+                add_group(
+                    merchant_name="HDBANK",
+                    merchant_id="KH HOAN TRA NAPAS",
+                    payment_type="TRANSFER",
+                    posting_date=posting_date,
+                    amount=credit_amount,
+                    note_raw=f"Phát sinh nợ {refer_num} {payment_info}",
+                    refer_num = refer_num
+                    
+                )
+
+                continue
+            
+            elif ("hoan tien cho" in payment_info.lower() ):
+
+                merchant_id = extract_hdbank_merchant(
+                    payment_info
+                )
+
+                amount = parse_amount(
+                    row.get("Phát sinh nợ", 0)
+                )
+
+                if amount == 0:
+                    continue
+
+                add_group(
+                    merchant_name="HDBANK",
+                    merchant_id="HOAN TIEN CHO",
+                    payment_type="REFUND",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=f"Phát sinh nợ hoàn tiền",
+                    refer_num = refer_num
+                    
+                )
+
+                continue
+            
+            elif ("thu phi dv chap nhan the" in payment_info.lower() ):
+
+                merchant_id = extract_hdbank_merchant(
+                    payment_info
+                )
+
+                amount = parse_amount(
+                    row.get("Phát sinh nợ", 0)
+                )
+
+                if amount == 0:
+                    continue
+
+                add_group(
+                    merchant_name="HDBANK",
+                    merchant_id="THU PHI DV THE",
+                    payment_type="FEE",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=f"Phát sinh nợ Thu phi DV chap nhan the",
+                    refer_num = refer_num
+                    
+                )
+
+                continue
+            elif ("thu phi chiet khau pos" in payment_info.lower() ):
+
+                merchant_id = extract_hdbank_merchant(
+                    payment_info
+                )
+
+                amount = parse_amount(
+                    row.get("Phát sinh nợ", 0)
+                )
+
+                if amount == 0:
+                    continue
+
+                add_group(
+                    merchant_name="HDBANK",
+                    merchant_id="THU PHI CHIET KHAU POS",
+                    payment_type="FEE",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=f"Phát sinh nợ Thu phi DV chap nhan the",
+                    refer_num = refer_num
+                    
+                )
+
+                continue
+            elif ("thu vat trong phi" in payment_info.lower() ):
+
+                merchant_id = extract_hdbank_merchant(
+                    payment_info
+                )
+
+                amount = parse_amount(
+                    row.get("Phát sinh nợ", 0)
+                )
+
+                if amount == 0:
+                    continue
+
+                add_group(
+                    merchant_name="HDBANK",
+                    merchant_id="THU VAT TRONG PHI",
+                    payment_type="FEE",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=f"Phát sinh nợ Thu phi DV chap nhan the",
+                    refer_num = refer_num
+                    
+                )
+
+                continue
+            
+            # ========================================================
+            # A-B-2. PHÁT SINH NỢ CÒN LẠI
+            # ========================================================
+            elif (credit_amount != 0):
+
+                merchant_id = extract_hdbank_merchant(
+                    payment_info
+                )
+
+                amount = parse_amount(
+                    row.get("Phát sinh nợ", 0)
+                )
+
+                if amount == 0:
+                    continue
+
+                add_group(
+                    merchant_name=merchant_name,
+                    merchant_id=merchant_id,
+                    payment_type="PAYMENT_CREDIT",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=f"Phát sinh nợ {refer_num} {payment_info}",
+                    refer_num = refer_num
+                    
+                )
+
+                continue
             # ========================================================
             # C. CÁC BÁO CÓ
             # ========================================================
@@ -1363,7 +1525,23 @@ def process_file_data(file_name, rows):
                     refer_num = refer_num
                 )
                 continue
-            elif "So giao dich" in payment_info:
+            elif "phi dich vu cong thanh toan quoc te" in payment_info.lower():
+                amount = parse_amount(
+                    row.get("Phát sinh có", 0)
+                )
+
+                add_group(
+                    merchant_name="HDBANK",
+                    merchant_id="PHI DICH VU CONG TT QUOC TE",
+                    payment_type="PAYMENT_INTERNATIONAL",
+                    posting_date=posting_date,
+                    amount=amount,
+                    note_raw=f"Phát sinh có {refer_num} {payment_info}",
+                    refer_num = refer_num
+                )
+                continue
+            
+            elif "loai giao dich: credit for c2c transaction" in payment_info.lower():
                 amount = parse_amount(
                     row.get("Phát sinh có", 0)
                 )
@@ -1378,6 +1556,7 @@ def process_file_data(file_name, rows):
                     refer_num = ""
                 )
                 continue
+            
             else:
                 amount = parse_amount(
                     row.get("Phát sinh có", 0)
