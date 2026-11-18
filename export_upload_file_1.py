@@ -740,6 +740,8 @@ def build_posting_info_mpgs(title, dr_cr, merchant, merchant_id, note, payment_t
             account = "1388404200" if dr_cr == "Nợ" else "3388403100"
         elif "Galaxy Pay: thất bại" in note:
             account = "1388404200" if dr_cr == "Nợ" else "3388403200"
+        else:
+            account = "1388404200" if dr_cr == "Nợ" else "3388403200"
     elif payment_type == "REFUND" and recon_result == "MATCH_SUCCESS" and note == "MISS_REFUND_FALSE":
         account = "3388403200" if dr_cr == "Nợ" else "1388404200"
         business_unit = merchant_bu if dr_cr == "Nợ" else "0037360001"
