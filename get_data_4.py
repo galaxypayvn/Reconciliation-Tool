@@ -277,7 +277,7 @@ def process_file_data(file_name, rows):
             ).strip()
             if merchant_name == "HDB_MPGS":
                 merchant_id = row.get(
-                "ĐVCNTT", ""
+                MERCHANT_ID_KEY, ""
                 ).strip()
             payment_type = row.get(
                 PAYMENT_TYPE_KEY, ""
